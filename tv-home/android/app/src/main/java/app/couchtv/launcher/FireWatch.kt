@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 
 /**
@@ -91,6 +92,26 @@ class FireWatch : AccessibilityService() {
             return
         }
         bringBack()
+    }
+
+    /**
+     * couch-tv-lab: catch the Home key itself. Letting it through made Android open the Google home
+     * first and hold couch-tv's return for its 5 s "app switch" pause (seen on a TCL 50P735 once Google
+     * Assistant was off; with it on, the Google home restarting itself happened to lift the pause after
+     * about 1 s). Caught here, the Google home never comes up. Only the Home key; every other key goes on
+     * untouched. If couch-tv keeps crashing (CrashGuard), Home goes to the TV's own home as before.
+     */
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_HOME) return false
+        if (CrashGuard.standingAside(this)) return false
+        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+            last = System.currentTimeMillis()
+            runCatching {
+                startActivity(Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+        }
+        return true   // the press and the release, so the Google home never sees this Home
     }
 
     private fun bringBack() {

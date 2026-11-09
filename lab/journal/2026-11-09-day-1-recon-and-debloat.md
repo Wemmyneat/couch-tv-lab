@@ -88,3 +88,25 @@ Findings:
   look change on a bridge-served home; worth reproducing and reporting.
 - The phone remote works from the iPhone (keys, power off/on); the bridge reconnected by itself after the TV
   came back from standby.
+
+## Phase 4, M1–M3 (same evening)
+- **Home after casting.** Two Home events while a cast ended left Google's home in front. First fix: couch-tv's
+  own window events no longer cancel the Home watch's re-check. Testing it found the real cost: since Google
+  Assistant was disabled, every Home press left Google's home up for **5 s**. That's Android's "app switch"
+  pause; before, Google's home restarting itself had lifted it after about 1 s. The fix that works: the Home
+  watch now **catches the Home key** (accessibility key filtering) and opens couch-tv itself, so Google's home
+  never comes up. Verified from couch-tv, from VLC and with two Homes in a row: couch-tv in front within 2 s.
+  TV app `0.12-lab.2`, signed with the fork's key (the first install needed an uninstall of upstream's copy).
+- **Look bug:** the TV app's WebView blocks every navigation, so `restart()` never reloaded. Now it reloads.
+- **TCL BrowseHere** (`com.tcl.browser`) had turned itself back on and was the source of the promo cards. Back on
+  the debloat list, and filtered from Keep watching. (I had first mixed it up with TV Browser.)
+- **Voice off:** Google Assistant disabled by choice.
+- **Remote:** a Shortcuts strip (custom buttons from config: screenshot, apps, inputs, sleep…), and a third
+  **Lab** tab with widget pages (Lab, Life, Network, Infra) and recent screenshots.
+- **Screenshots** save on wemserver. Immich is ready but waits for an API key; the NAS waits for a pve2 NFS mount.
+- **TV home:** a display-only Lab strip, top right on the Night look.
+- **Security review fixes:** private screenshots never cached, generic errors to clients, code root-owned with
+  the service writing only its data, remote built off-host, pip wheels-only and only on change. The review also
+  caught a real deploy bug: an unanchored `--exclude dist` had kept the new remote off the server.
+- **Router exporter units:** labelled GB but reads like MB (4,040 "GB" by the 9th); shown as MB/1024. To confirm.
+- **Hub source `beaver` is failing**, which the Infra page shows.

@@ -11,8 +11,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # runs npm or writes code on the server.
 if [ "${1:-}" = --remote ]; then (cd "$ROOT/remote" && npm ci --no-audit --no-fund --loglevel=error && npm run build >/dev/null) && echo "remote built"; fi
 rsync -a --delete \
-  --exclude .git --exclude .venv --exclude dist --exclude build --exclude node_modules \
-  --exclude config.json --exclude .env --exclude bridge/data --exclude tvs/ \
+  --exclude /.git --exclude /.venv --exclude /dist --exclude /build --exclude node_modules \
+  --exclude /config.json --exclude /.env --exclude /bridge/data --exclude /tv-home/tvs/ \
   --exclude 'lab/**/out-*' --exclude 'lab/**/backup-*' \
   "$ROOT/" "$HOST:$DIR/"
 # Code stays root's: the service user can write only its data, its config (pairing marks it) and the
@@ -21,5 +21,6 @@ ssh "$HOST" "chown -R root:root '$DIR' && chmod -R go-w '$DIR' && install -d -o 
 case "${1:-}" in
   --web) echo "copied (no restart)";;
   --remote) ssh "$HOST" "systemctl restart couch-tv-bridge && sleep 3 && systemctl is-active couch-tv-bridge";;
-  *) ssh "$HOST" "cd '$DIR' && .venv/bin/pip install -q --disable-pip-version-check -r bridge/requirements.txt && systemctl restart couch-tv-bridge && sleep 3 && systemctl is-active couch-tv-bridge";;
+  *) # Python packages only when requirements.txt changed, and wheels only: no package build script runs as root.
+     ssh "$HOST" "cd '$DIR' && h=\$(sha256sum bridge/requirements.txt | cut -c1-64) && if [ \"\$(cat .venv/.req-sha 2>/dev/null)\" != \"\$h\" ]; then .venv/bin/pip install -q --disable-pip-version-check --only-binary :all: -r bridge/requirements.txt && echo \$h > .venv/.req-sha && echo 'packages updated'; fi && systemctl restart couch-tv-bridge && sleep 3 && systemctl is-active couch-tv-bridge";;
 esac
