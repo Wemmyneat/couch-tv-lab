@@ -82,3 +82,9 @@ Findings:
 - After the switch the TV home came up in the Classic look (the TV sent `look: classic` in its Home settings).
   Classic shows apps in default order, so the dock order looked lost until the Night look was back.
 - The bridge has no auth: anyone on the LAN can use the remote. Fine for a home LAN, not for anything wider.
+- Follow-up: pressing Night look saved `look: night` to the bridge, but the page kept drawing Classic until
+  the app was restarted (`am force-stop app.couchtv.launcher`, then start it). After that: Night look, the
+  dock order back, and the bridge's quick buttons. Possible upstream bug in the in-page restart after a
+  look change on a bridge-served home; worth reproducing and reporting.
+- The phone remote works from the iPhone (keys, power off/on); the bridge reconnected by itself after the TV
+  came back from standby.
