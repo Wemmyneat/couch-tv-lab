@@ -155,8 +155,31 @@ def record_action(request, tool, args, success):
 
 
 # ---------- middleware: CORS + errors ----------
+# couch-tv-lab: the lab and screenshot endpoints carry private data (hub tasks, screenshots, host inventory)
+# and act on it with server-side tokens. The phone remote and the TV home are served by the bridge itself
+# (same origin), and Shortcuts, Hermes (MCP) and curl send no Origin at all; a request whose Origin is some
+# other site is a page elsewhere trying to use the bridge through the person's browser, so it is refused,
+# and these paths get no wildcard CORS header (the preflight included).
+PRIVATE_PATHS = ("/api/lab/", "/api/screenshot")
+
+
+def _foreign_origin(request):
+    origin = request.headers.get("Origin")
+    if not origin:
+        return False
+    try:
+        from urllib.parse import urlsplit
+        return urlsplit(origin).netloc.lower() != (request.host or "").lower()
+    except ValueError:
+        return True
+
+
 @web.middleware
 async def middleware(request, handler):
+    private = request.path.startswith(PRIVATE_PATHS)
+    if private and _foreign_origin(request):
+        log.info("refused %s %s from origin %s", request.method, request.path, request.headers.get("Origin"))
+        return web.json_response({"ok": False, "error": "not from this site"}, status=403)
     if request.method == "OPTIONS":
         resp = web.Response(status=204)
     else:
@@ -184,9 +207,10 @@ async def middleware(request, handler):
         except Exception as e:
             log.exception("handler failed")
             resp = web.json_response({"ok": False, "error": f"bridge error: {e}"}, status=500)
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Ask-Id"
+    if not private:
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Ask-Id"
     return resp
 
 
