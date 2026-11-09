@@ -205,7 +205,8 @@ async def _immich_upload(name, png, when):
         async with s.post(f"{IMMICH_URL}/api/assets", data=form, headers=h) as r:
             j = await r.json(content_type=None)
             if r.status >= 300 or "id" not in j:
-                raise RuntimeError(f"Immich upload: {r.status} {str(j)[:120]}")
+                log.info("Immich upload refused: %s %s", r.status, str(j)[:200])
+                raise RuntimeError(f"Immich refused the upload ({r.status})")
             asset = j["id"]
         if not _album_id:
             async with s.get(f"{IMMICH_URL}/api/albums", headers=h) as r:
@@ -247,8 +248,9 @@ async def save_screenshot(tv_id=None):
                 await _immich_upload(name, png, when)
                 saved.append("immich")
         except Exception as e:
-            errors.append({"target": t, "error": str(e)[:200]})
             log.info("screenshot to %s failed: %s", t, e)
+            # only messages this module wrote itself go to the phone; anything else stays in the log
+            errors.append({"target": t, "error": str(e)[:120] if isinstance(e, RuntimeError) else "failed (see the bridge log)"})
     note = "looks blank: this app blocks screenshots" if len(png) < BLANK_BYTES else None
     return {"ok": bool(saved), "name": name, "saved": saved, "errors": errors, "note": note}
 
@@ -281,7 +283,7 @@ async def h_shot_file(request):
     path = os.path.join(SHOT_DIR, name[-21:-11], name)
     if not os.path.isfile(path):
         raise S.ApiError(404, "no such screenshot")
-    return web.FileResponse(path, headers={"Cache-Control": "max-age=86400"})
+    return web.FileResponse(path, headers={"Cache-Control": "no-store"})   # private captures: never cached
 
 
 # ---------- widgets: homelab data on the TV and the phone ----------
@@ -418,7 +420,8 @@ async def render_widget(w):
                 if not items and w.get("empty"):
                     out["empty"] = str(w["empty"])[:60]
     except Exception as e:
-        out.update(ok=False, error=str(e)[:120])
+        log.info("lab widget %s failed: %s", w["id"], e)
+        out.update(ok=False, error=str(e)[:120] if isinstance(e, RuntimeError) else "source unavailable")
     return out
 
 
