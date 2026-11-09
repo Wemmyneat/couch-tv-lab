@@ -44,3 +44,7 @@ tv-home/web/backgrounds/mine/*
 
 # Your own app logos for the Samsung home (samsung/build.py)
 samsung/my-logos/
+
+# couch-tv-lab: per-TV recon output and debloat backups hold LAN details (SSID, MACs)
+lab/**/out-*/
+lab/**/backup-*/
