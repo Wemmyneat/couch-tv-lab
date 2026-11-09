@@ -17,6 +17,14 @@ adb connect "$TV" >/dev/null
 [ "$(adb -s "$TV" get-state 2>/dev/null)" = device ] || { echo "TV not authorised/reachable at $TV"; exit 1; }
 
 PKGS=$(sed -E 's/#.*//; s/[[:space:]]+//g; /^$/d' "$LIST")
+# adb shell hands its arguments to the TV's shell as one string, so a list entry like "com.x;reboot" would run.
+# Every entry must be a plain Android package name. One bad line stops the script before anything changes.
+set -f
+NAME='^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$'
+bad=0; for p in $PKGS; do [[ "$p" =~ $NAME ]] || { echo "BAD NAME  $p  (not a package name)"; bad=1; }; done
+[ $bad = 0 ] || { echo "Fix $LIST first. Nothing was changed."; exit 1; }
+case "$MODE" in plan|apply|undo) ;; *) echo "unknown mode $MODE"; exit 1 ;; esac
+
 INSTALLED=$(sh_ pm list packages | sed 's/package://')
 DISABLED=$(sh_ pm list packages -d | sed 's/package://')
 
