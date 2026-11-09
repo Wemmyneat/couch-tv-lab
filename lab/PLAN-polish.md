@@ -94,3 +94,50 @@ powerOS already runs on wemserver and is read-only by design. Have it expose **P
 4. Screenshots paging and thumbnails.
 5. Fixed addresses and the AdGuard name.
 6. Then M4 (alerts + Hermes), with powerOS when the EW10A is in.
+
+---
+
+## Revision after the mockup review (owner's 11 comments, 2026-11-09)
+These replace the matching points above where they differ.
+
+**Remote tab (artboard 1, v2)**
+- Top bar **as before**: the person switch (Wemmyneat | Both), the current app's name, More, Power. No TV chip.
+- **Now playing as before**: artwork, the card takes the show's colour, plus a progress line.
+- Touch pad keeps its **chevrons on all four sides**. While a finger is on it, the pad **expands over the volume
+  wheel's space** and the wheel shrinks to a thin vertical volume bar, springing back on lift.
+  **Pad speed (DPI)** becomes a setting: Settings › Remote, slow / normal / fast, i.e. points of travel per step.
+- **Volume wheel stays beside the pad** (right thumb's natural vertical stroke), with a left-hand mirror setting.
+  It shows the **audio output**: TV speakers, Soundbar (ARC) or Bluetooth <name>, from `dumpsys audio` over ADB
+  (`speaker`, `hdmi`, `bt_a2dp`).
+- Nav row is **Play/Pause, Mute, Back**, with **Back at the end** of the row (right thumb).
+- **TV Home moves out of the reach zone**: a round button beside the tab bar, not a tab. It presses Home on the TV.
+- The tab bar keeps the **original icons** for Remote, Watch and Lab.
+
+**Lab tab (artboard 2)**
+- The router chip shows the **active service and a signal percentage**: `5G (NSA) · 74%`. Source:
+  `mtn_network_info{network_type}`, plus RSRP of the active RAT (`mtn_signal_rsrp_dbm{tech="5g"}` when
+  `mtn_network_type`=5). Percent = (RSRP + 140) / 96, clamped. The same on the TV's Internet widget.
+- Adds **TV widgets** (editor) and Screenshots as two entry tiles.
+
+**TV home: widgets on a real grid (artboards 5, 6)**
+- The Lab strip becomes a **widget grid**: 2 columns × 4 rows of 96 px cells, top right under the quick
+  buttons. Widgets are **1×1 or 2×1** and never stretch to fill the space; empty cells stay empty (invisible).
+- **Widget catalog from the server**: `lab.widgets` in the bridge config (what each widget is, its source, its
+  allowed sizes). The **layout per TV** is saved on the bridge (`data/widgets.<tv>.json`):
+  `[{"id","x","y","w","h"}]`.
+- **Editor on the phone** (Lab › TV widgets): drag to arrange, − to remove, + to add from the catalog. The TV
+  updates live (SSE). On the TV, hold OK on a widget: Move / Remove.
+- Alert toasts (the owner likes them) stay top left; M4 delivers them.
+- Fixes the overlap in the owner's TV photo, where the old strip ran into the quick buttons.
+
+**New in the backlog:** pad speed setting, left-hand mirror, audio-output label, widget editor + layout API
+(`GET/POST /api/lab/layout`, `GET /api/lab/widgets`).
+
+### Revised order
+1. Night look fix (TV app 0.12-lab.3) + Watch tab hides disabled apps.
+2. **TV widget grid + layout API + phone widget editor** (replaces the Lab strip).
+3. Lab tab: safe area, actions, router chip, pve sheets (node_exporter + read-only PVE token).
+4. Remote tab v2: top bar and now-playing as before, expanding pad + wheel, nav row with Back last, TV Home by
+   the tabs, pad speed, audio output.
+5. Screenshots paging and thumbnails.
+6. Fixed addresses and the AdGuard name; then M4 (alerts + Hermes) and powerOS when the EW10A arrives.
