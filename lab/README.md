@@ -24,6 +24,6 @@ want the living-room TV to be part of their stack, not an ad billboard.
 - [x] Phase 0: recon of the reference TV (TCL 50P735)
 - [x] Phase 1: debloat (34 packages disabled, reboot verified over ADB; manual checks pending)
 - [x] Phase 2: couch-tv as the home (option A, v0.12)
-- [ ] Phase 3: bridge on the homelab server (option B)
+- [x] Phase 3: bridge on the homelab server (option B, wemserver, systemd)
 - [ ] Phase 4: the lab layer (widgets, homelab pages, alerts, Lab Ambient screensaver, Hermes MCP tools)
 - [ ] Phase 5: public release and docs

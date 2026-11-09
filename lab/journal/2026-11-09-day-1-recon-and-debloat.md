@@ -65,3 +65,20 @@ Findings:
 - Fixed by hand on the TV the same afternoon, checked over ADB: time zone `Africa/Lagos` (the clock matches),
   dock now YouTube, Netflix, Apple TV, VLC, Browser, and one Google account left after removing the
   previous owner's.
+
+## Phase 3: the bridge on wemserver (option B)
+wemserver (Debian 13 LXC, Python 3.13, Node 22) could reach the TV on 5555 (ADB), 6466/6467 (remote protocol)
+and 8009 (Cast). Deployed to `/opt/couch-tv-lab`, running as a dedicated `couchtv` system user rather than root,
+because the bridge holds an ADB key that controls the TV. Built the phone remote with npm on the server.
+
+Paired twice from the server: the Android TV remote protocol (6-character code read off the TV) and ADB (Allow on
+the TV). Then a hardened systemd unit (`NoNewPrivileges`, `ProtectSystem=strict`, write access only to the app and
+its home), and `apply.sh` re-run from the Mac with `BRIDGE_URL`. `/api/health` reports the TV connected with ADB;
+`/api/now` sees the home in front, the volume and the person; `/api/screenshot` works.
+
+Findings:
+- The remote protocol reports a different MAC (`38:C8:…`) from the Wi-Fi MAC. Wake-on-LAN uses the Wi-Fi one
+  and is untested.
+- After the switch the TV home came up in the Classic look (the TV sent `look: classic` in its Home settings).
+  Classic shows apps in default order, so the dock order looked lost until the Night look was back.
+- The bridge has no auth: anyone on the LAN can use the remote. Fine for a home LAN, not for anything wider.
