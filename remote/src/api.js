@@ -8,6 +8,7 @@ export class ApiError extends Error {
 // nothing is added to any call, exactly as before more than one TV existed.
 let tvId = null;
 export const setTvId = (id) => { tvId = id || null; };
+export const getTvId = () => tvId;
 const withTv = (path) => (tvId ? `${path}${path.includes('?') ? '&' : '?'}tv=${encodeURIComponent(tvId)}` : path);
 
 // Every call gives up in the end, so the app never sits on "Loading" for ever.
@@ -64,6 +65,10 @@ export const api = {
   screenshots: () => call('GET', '/api/screenshots'),
   labPages: () => call('GET', '/api/lab/pages'),
   labWidgets: () => call('GET', '/api/lab/widgets'),
+  labStatus: () => call('GET', '/api/lab/status', null, 15000),
+  labOpen: (id) => call('POST', `/api/lab/open/${encodeURIComponent(id)}`, {}, 20000),
+  labHub: () => call('GET', '/api/lab/hub', null, 15000),
+  labHubAction: (type, id, done) => call('POST', '/api/lab/hub/action', { type, id, done }),
   labLayout: () => call('GET', '/api/lab/layout', null, 20000),
   saveLabLayout: (items) => call('POST', '/api/lab/layout', { items }),
   labPage: (id) => call('GET', `/api/lab/page/${encodeURIComponent(id)}`, null, 20000),

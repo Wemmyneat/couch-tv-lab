@@ -71,6 +71,8 @@ def _step(s):
         return {kind: v}
     if kind == "screenshot" and v is True:
         return {kind: True}
+    if kind == "open" and isinstance(v, str) and ID_RE.fullmatch(v):   # a page from lab.links, opened on the TV
+        return {kind: v}
     if kind == "wait" and isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= MAX_WAIT:
         return {kind: float(v)}
     return None
@@ -137,6 +139,8 @@ async def run_step(step, tv_id):
         return await _self("POST", "/api/power", {"state": v}, tv_id)
     if kind == "screenshot":
         return await save_screenshot(tv_id)
+    if kind == "open":
+        return await open_on_tv(v, tv_id)
     raise RuntimeError(f"unknown step {kind}")
 
 
@@ -541,7 +545,115 @@ async def h_page(request):
     return S.ok(id=p["id"], title=p["title"], widgets=list(widgets), at=S.now_iso())
 
 
+# ---------- the Lab tab: status chips, pages to open on the TV, hub actions ----------
+URL_RE = re.compile(r"https?://[A-Za-z0-9.:/_%?=&#~+@,;-]{1,500}")
+PKG_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+")
+LINKS = {}
+for _id, _l in (LAB.get("links") or {}).items():
+    if ID_RE.fullmatch(str(_id)) and isinstance(_l, dict) and URL_RE.fullmatch(str(_l.get("url") or "")):
+        LINKS[_id] = {"label": str(_l.get("label") or _id)[:24], "url": _l["url"],
+                      "app": _l["app"] if PKG_RE.fullmatch(str(_l.get("app") or "")) else "com.internet.tvbrowser"}
+HOSTS = [h for h in (LAB.get("hosts") or [])[:12] if isinstance(h, dict) and ID_RE.fullmatch(str(h.get("id") or ""))
+         and isinstance(h.get("host"), str) and re.fullmatch(r"[A-Za-z0-9.-]{1,100}", h["host"]) and isinstance(h.get("port"), int)]
+HUB = LAB.get("hub_source") if LAB.get("hub_source") in SOURCES else None
+
+
+async def open_on_tv(link_id, tv_id):
+    import shlex
+    link = LINKS.get(link_id)
+    if not link:
+        raise RuntimeError(f"no link {link_id!r} in lab.links")
+    tok = S._current.set(tv_id)
+    try:
+        # adb shell joins its arguments into one string for the TV's shell, so the URL is quoted
+        await S.tv.adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+                       "-d", shlex.quote(link["url"]), "-p", link["app"])
+    finally:
+        S._current.reset(tok)
+    return {"note": f"Opened {link['label']} on the TV"}
+
+
+async def _reachable(host, port):
+    try:
+        _, w = await asyncio.wait_for(asyncio.open_connection(host, port), 2)
+        w.close()
+        return True
+    except Exception:
+        return False
+
+
+async def h_status(request):
+    chips = []
+    net = CATALOG.get("internet")
+    if net:
+        r = await render_widget(dict(net, id="internet"))
+        chips.append({"id": "internet", "label": f"{r.get('value', '–')} · {r.get('sub', '')}".strip(" ·") if r["ok"] else "Router",
+                      "state": "ok" if r["ok"] else "down"})
+    if HUB:
+        try:
+            src = (await _source(HUB)).get("sources") or []
+            good = sum(1 for s in src if s.get("ok"))
+            chips.append({"id": "hub", "label": f"Hub {good}/{len(src)}", "state": "ok" if good == len(src) else "warn"})
+        except Exception as e:
+            log.info("hub status failed: %s", e)
+            chips.append({"id": "hub", "label": "Hub", "state": "down"})
+    ups = await asyncio.gather(*(_reachable(h["host"], h["port"]) for h in HOSTS))
+    chips += [{"id": h["id"], "label": str(h.get("label") or h["id"])[:20], "state": "ok" if up else "down"} for h, up in zip(HOSTS, ups)]
+    if LAB.get("power_pending"):
+        chips.append({"id": "power", "label": str(LAB["power_pending"])[:40], "state": "idle"})
+    return S.ok(chips=chips, links=[{"id": k, "label": v["label"]} for k, v in LINKS.items()], hub=bool(HUB))
+
+
+async def h_hub(request):
+    if not HUB:
+        raise S.ApiError(404, "no lab.hub_source")
+    d = await _source(HUB)
+    tasks = [{"id": t["id"], "title": str(t.get("title") or "")[:80], "due": bool(t.get("dueToday")), "overdue": bool(t.get("overdue"))}
+             for t in (d.get("tasks") or []) if isinstance(t, dict) and isinstance(t.get("id"), str) and not t.get("done")][:30]
+    habits = [{"id": h["id"], "title": str(h.get("title") or h.get("name") or "")[:80], "done": bool(h.get("doneToday"))}
+              for h in (d.get("habits") or []) if isinstance(h, dict) and isinstance(h.get("id"), str)][:30]
+    return S.ok(tasks=tasks, habits=habits)
+
+
+async def h_hub_action(request):
+    """Only the hub's two actions, forwarded with the bridge's own token: complete a task, check a habit."""
+    if not HUB:
+        raise S.ApiError(404, "no lab.hub_source")
+    data = await S.body(request)
+    kind, iid = data.get("type"), data.get("id")
+    if kind not in ("complete-task", "check-habit") or not isinstance(iid, str) or not re.fullmatch(r"[A-Za-z0-9:@._-]{1,120}", iid):
+        raise S.ApiError(400, "type must be complete-task or check-habit, with an id")
+    payload = {"type": kind, "id": iid}
+    if kind == "check-habit":
+        payload["done"] = data.get("done") is not False
+    src = SOURCES[HUB]
+    url = src["url"].rsplit("/hub/", 1)[0] + "/hub/actions"
+    tok = os.environ.get(src["auth_env"] or "")
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+        async with s.post(url, json=payload, headers={"Authorization": f"Bearer {tok}"}) as r:
+            if r.status >= 300:
+                log.info("hub action %s refused: %s %s", kind, r.status, (await r.text())[:200])
+                raise S.ApiError(502, f"the hub refused it ({r.status})")
+    _cache.pop(src["url"], None)   # the next read shows the change
+    S.record_action(request, "hub_action", payload, True)
+    return S.ok(**payload)
+
+
+async def h_open(request):
+    data = await S.body(request)
+    try:
+        r = await open_on_tv(request.match_info["id"], _tv_id(request, data))
+    except RuntimeError as e:
+        raise S.ApiError(404, str(e))
+    S.record_action(request, "lab_open", {"id": request.match_info["id"]}, True)
+    return S.ok(**r)
+
+
 def routes(r):
+    r.add_get("/api/lab/status", h_status)
+    r.add_post("/api/lab/open/{id}", h_open)
+    r.add_get("/api/lab/hub", h_hub)
+    r.add_post("/api/lab/hub/action", h_hub_action)
     r.add_get("/api/lab/widgets", h_widgets)
     r.add_get("/api/lab/layout", h_layout_get)
     r.add_post("/api/lab/layout", h_layout_post)

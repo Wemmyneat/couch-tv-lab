@@ -1,9 +1,10 @@
 // couch-tv-lab: the custom buttons strip (lab.buttons in config.json, bridge/lab.py).
 // One tap runs the button's steps on the bridge: keys, apps, inputs, volume, sleep, power, screenshot.
 import { useEffect, useState } from 'react';
-import { api } from './api.js';
+import { api, getTvId } from './api.js';
 import * as Ic from './icons.jsx';
 import { tick } from './haptics.js';
+import { Sheet } from './Sheets.jsx';
 
 const ICON = {
   camera: Ic.Camera, monitor: Ic.Screen, moon: Ic.Moon, power: Ic.Power, tv: Ic.Screen, music: Ic.Music,
@@ -65,40 +66,102 @@ function Widget({ w }) {
   );
 }
 
-// The Lab tab: pages from lab.pages (bridge/lab.py), refreshed every 30 s while it is showing.
-export function LabPage({ reach, active, onSaid }) {
-  const [pages, setPages] = useState(null);
-  const [cur, setCur] = useState(null);
-  const [page, setPage] = useState(null);
-  const [err, setErr] = useState(null);
+// The Lab tab, actions first (lab/PLAN-polish.md): a line of status chips, things to do on the TV, homelab
+// tiles that open a sheet, then the TV widgets editor and the screenshots. Stats live on the TV and in
+// Grafana; the phone is for doing things.
+function Shots() {
   const [shots, setShots] = useState(null);
-  useEffect(() => { api.labPages().then((d) => { setPages(d.pages || []); setCur((c) => c || d.pages?.[0]?.id || null); }).catch((e) => setErr(e.message)); }, [reach]);
+  useEffect(() => { api.screenshots().then((d) => setShots(d.shots || [])).catch(() => setShots([])); }, []);
+  return (
+    <div className="lab-shots">{(shots || []).map((s) => (
+      <a key={s.name} href={s.url} target="_blank" rel="noreferrer"><img src={s.url} alt={s.name} loading="lazy" /><small>{s.name.replace(/^[^-]+-[^-]+-/, '').replace(/\.png$/, '')}</small></a>
+    ))}{shots && !shots.length && <p className="lab-sub">No screenshots yet.</p>}</div>
+  );
+}
+
+function HubSheet({ open, onClose, onSaid }) {
+  const [d, setD] = useState(null);
+  const load = () => api.labHub().then(setD).catch((e) => onSaid?.(e.message, 'err'));
+  useEffect(() => { if (open) load(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const act = (type, id, done) => { tick(); api.labHubAction(type, id, done).then(() => { onSaid?.(type === 'complete-task' ? 'Task done' : 'Habit logged'); load(); }).catch((e) => onSaid?.(e.message, 'err')); };
+  return (
+    <Sheet open={open} onClose={onClose} title="Today">
+      <div className="hub-sheet">
+        <h3 className="lab-h">Tasks</h3>
+        {d?.tasks?.length ? <ul className="wcat">{d.tasks.map((t) => (
+          <li key={t.id}><div><b>{t.title}</b><small>{t.overdue ? 'overdue' : t.due ? 'due today' : ''}</small></div>
+            <button className="wadd" aria-label={`Complete ${t.title}`} onClick={() => act('complete-task', t.id)}>✓</button></li>
+        ))}</ul> : <p className="lab-sub">{d ? 'Nothing due.' : 'Loading…'}</p>}
+        <h3 className="lab-h">Habits</h3>
+        {d?.habits?.length ? <ul className="wcat">{d.habits.map((h) => (
+          <li key={h.id}><div><b>{h.title}</b><small>{h.done ? 'done today' : 'not yet'}</small></div>
+            <button className={`wadd ${h.done ? 'on' : ''}`} aria-pressed={h.done} aria-label={`${h.done ? 'Undo' : 'Log'} ${h.title}`} onClick={() => act('check-habit', h.id, !h.done)}>{h.done ? '✓' : '+'}</button></li>
+        ))}</ul> : <p className="lab-sub">{d ? 'No habits today.' : ''}</p>}
+      </div>
+    </Sheet>
+  );
+}
+
+function HostSheet({ chip, onClose }) {
+  return (
+    <Sheet open={Boolean(chip)} onClose={onClose} title={chip?.label || ''}>
+      <div className="hub-sheet">
+        <p className="lab-sub"><i className={`dot ${chip?.state === 'ok' ? 'up' : 'down'}`} /> {chip?.state === 'ok' ? 'Reachable from the bridge' : 'Not answering'}</p>
+        <p className="lab-sub">CPU, memory, disk and guests appear here once node_exporter and a read-only Proxmox token are set up (lab/PLAN-polish.md, step 3). Read-only: restart and shutdown stay in Proxmox.</p>
+      </div>
+    </Sheet>
+  );
+}
+
+const STATE_DOT = { ok: 'up', down: 'down', warn: 'warn', idle: 'idle' };
+
+export function LabPage({ reach, active, onSaid }) {
+  const [st, setSt] = useState(null);
+  const [view, setView] = useState('home');
+  const [busy, setBusy] = useState(null);
+  const [hub, setHub] = useState(false);
+  const [host, setHost] = useState(null);
   useEffect(() => {
-    if (!active || !cur || cur === '_widgets') return undefined;
+    if (!active) return undefined;
     let live = true;
-    const load = () => (cur === '_shots'
-      ? api.screenshots().then((d) => live && setShots(d.shots || []))
-      : api.labPage(cur).then((d) => { if (live) { setPage(d); setErr(null); } })).catch((e) => live && setErr(e.message));
+    const load = () => api.labStatus().then((d) => live && setSt(d)).catch(() => {});
     load();
     const t = setInterval(load, 30000);
     return () => { live = false; clearInterval(t); };
-  }, [active, cur, reach]);
-  if (err && !pages) return <div className="lab"><p className="lab-sub">{err}</p></div>;
-  if (!pages) return <div className="lab" />;
+  }, [active, reach]);
+  const run = (key, p) => { if (busy) return; tick(); setBusy(key); p.then((r) => { const m = labResult(r); onSaid?.(r.note || m.text, m.kind); }, (e) => onSaid?.(e.message, 'err')).finally(() => setBusy(null)); };
+  if (view !== 'home') {
+    return (
+      <div className="lab">
+        <div className="lab-top"><button className="round glass small" aria-label="Back to Lab" onClick={() => { tick(); setView('home'); }}><Ic.Back size={18} /></button>
+          <h1 className="lab-title">{view === 'widgets' ? 'TV widgets' : 'Screenshots'}</h1></div>
+        {view === 'widgets' ? <WidgetEditor onSaid={onSaid} /> : <Shots />}
+      </div>
+    );
+  }
+  const hosts = (st?.chips || []).filter((c) => !['internet', 'hub', 'power'].includes(c.id));
   return (
     <div className="lab">
-      <div className="chips-row chips-wrap lab-tabs">
-        {pages.map((p) => <button key={p.id} className={`chip glass ${cur === p.id ? 'on' : ''}`} onClick={() => { tick(); setCur(p.id); }}>{p.title}</button>)}
-        <button className={`chip glass ${cur === '_widgets' ? 'on' : ''}`} onClick={() => { tick(); setCur('_widgets'); }}>TV widgets</button>
-        <button className={`chip glass ${cur === '_shots' ? 'on' : ''}`} onClick={() => { tick(); setCur('_shots'); }}>Screenshots</button>
+      <h1 className="lab-title">Lab</h1>
+      <div className="lab-chips" role="list" aria-label="Status">
+        {(st?.chips || []).map((c) => <span key={c.id} role="listitem" className="lab-chip glass"><i className={`dot ${STATE_DOT[c.state] || ''}`} />{c.label}</span>)}
       </div>
-      {cur === '_widgets' ? <WidgetEditor onSaid={onSaid} /> : cur === '_shots' ? (
-        <div className="lab-shots">{(shots || []).map((s) => (
-          <a key={s.name} href={s.url} target="_blank" rel="noreferrer"><img src={s.url} alt={s.name} loading="lazy" /><small>{s.name.replace(/^[^-]+-[^-]+-/, '').replace(/\.png$/, '')}</small></a>
-        ))}{shots && !shots.length && <p className="lab-sub">No screenshots yet. Tap Screenshot on the Remote tab.</p>}</div>
-      ) : (
-        <div className="lab-grid">{page?.id === cur && page.widgets.map((w) => <Widget key={w.id} w={w} />)}</div>
-      )}
+      <h3 className="lab-h">On the TV</h3>
+      <div className="lab-tiles">
+        <button className="lab-tile glass accent" aria-busy={busy === 'shot'} onClick={() => run('shot', api.labAction('screenshot'))}><Ic.Camera size={22} /><span>Screenshot</span></button>
+        {(st?.links || []).map((l) => <button key={l.id} className="lab-tile glass" aria-busy={busy === l.id} onClick={() => run(l.id, api.labOpen(l.id))}><Ic.Chart size={22} /><span>Show {l.label}</span></button>)}
+      </div>
+      <h3 className="lab-h">Homelab</h3>
+      <div className="lab-tiles">
+        {hosts.map((h) => <button key={h.id} className="lab-tile glass small" onClick={() => { tick(); setHost(h); }}><span>{h.label}</span><small><i className={`dot ${STATE_DOT[h.state]}`} />{h.state === 'ok' ? 'up' : 'down'}</small></button>)}
+        {st?.hub && <button className="lab-tile glass small" onClick={() => { tick(); setHub(true); }}><span>Hub actions</span><small>tasks · habits</small></button>}
+      </div>
+      <div className="lab-tiles">
+        <button className="lab-tile glass small" onClick={() => { tick(); setView('widgets'); }}><span>TV widgets</span><small>add · arrange</small></button>
+        <button className="lab-tile glass small" onClick={() => { tick(); setView('shots'); }}><span>Screenshots</span><small>server · Immich</small></button>
+      </div>
+      <HubSheet open={hub} onClose={() => setHub(false)} onSaid={onSaid} />
+      <HostSheet chip={host} onClose={() => setHost(null)} />
     </div>
   );
 }
@@ -124,13 +187,15 @@ export function WidgetEditor({ onSaid }) {
   const [items, setItems] = useState(null);
   const [sel, setSel] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [loadedTv, setLoadedTv] = useState(null);   // the TV this layout came from; saves go only there
   useEffect(() => {
     api.labWidgets().then((d) => { setCat(d.widgets || []); setGrid({ cols: d.cols, rows: d.rows }); }).catch((e) => onSaid?.(e.message, 'err'));
-    api.labLayout().then((d) => setItems((d.items || []).map(({ id, x, y, w, h }) => ({ id, x, y, w, h })))).catch((e) => onSaid?.(e.message, 'err'));
+    api.labLayout().then((d) => { setLoadedTv(d.tv); return d; }).then((d) => setItems((d.items || []).map(({ id, x, y, w, h }) => ({ id, x, y, w, h })))).catch((e) => onSaid?.(e.message, 'err'));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   if (!cat || !items) return <p className="lab-sub">Loading the TV's widgets…</p>;
   const byId = Object.fromEntries(cat.map((w) => [w.id, w]));
   const save = (next) => {
+    if (loadedTv && (getTvId() || loadedTv) !== loadedTv) { onSaid?.('You switched TV. Close and reopen TV widgets.', 'err'); return; }
     const before = items; setItems(next); setBusy(true); tick();
     api.saveLabLayout(next).then(() => onSaid?.('Saved. The TV updates in a few seconds.'))
       .catch((e) => { setItems(before); onSaid?.(e.message, 'err'); }).finally(() => setBusy(false));

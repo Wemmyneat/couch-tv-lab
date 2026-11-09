@@ -587,3 +587,19 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .wcat li div { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .wcat b { font-size: 15px; } .wcat small { font-size: 12px; color: var(--ink-2); }
 .wadd { width: 36px; height: 36px; border-radius: 18px; background: rgba(124,196,255,0.18); color: #7cc4ff; font-size: 20px; line-height: 1; }
+
+/* couch-tv-lab: Lab tab, actions first */
+.lab-title { margin: 0; font: 700 32px/1.1 var(--font-d, inherit); letter-spacing: -0.02em; }
+.lab-top { display: flex; align-items: center; gap: 10px; }
+.lab-top .lab-title { font-size: 24px; }
+.lab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lab-chip { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 15px; font-size: 13px; }
+.dot.warn { background: #ffb547; } .dot.idle { background: #5a5a62; }
+.lab-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lab-tile { height: 88px; border-radius: 20px; padding: 14px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; font-size: 15px; font-weight: 600; }
+.lab-tile.small { height: 72px; }
+.lab-tile small { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.lab-tile.accent { background: rgba(124,196,255,0.16); color: #cfe8ff; }
+.lab-tile[aria-busy="true"] { opacity: 0.55; }
+.hub-sheet { display: flex; flex-direction: column; gap: 10px; padding: 0 var(--side, 16px) 24px; }
+.wadd.on { background: rgba(61,220,132,0.2); color: #3ddc84; }
