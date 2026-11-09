@@ -356,13 +356,13 @@ export default function App() {
           <button onClick={() => { tick(); onRetry(); }}>{t('try_again')}</button></div>
       )}
       {wide ? (
-        <main className="split">{remote}<div className="watch-col">{watch}<LabPage reach={reach} active /></div></main>
+        <main className="split">{remote}<div className="watch-col">{watch}<LabPage reach={reach} active onSaid={say} /></div></main>
       ) : (
         <main className="single">
           <div ref={pager} className="pager" onScroll={onPage}>
             <section className="page" aria-label="Remote" inert={tab !== 'remote'}>{remote}</section>
             <section className="page watch-page" aria-label="Watch" inert={tab !== 'watch'}>{watch}</section>
-            <section className="page lab-page" aria-label="Lab" inert={tab !== 'lab'}><LabPage reach={reach} active={tab === 'lab'} /></section>
+            <section className="page lab-page" aria-label="Lab" inert={tab !== 'lab'}><LabPage reach={reach} active={tab === 'lab'} onSaid={say} /></section>
           </div>
           <div className="dock" {...dockDrag}>
             {askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
