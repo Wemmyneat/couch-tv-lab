@@ -59,10 +59,10 @@ Findings:
 Manual checks remaining: [CHECKLIST.md](CHECKLIST.md).
 
 ## Owner's own app changes (after Phase 1, 2026-11-09)
-Done by hand on the TV, not by `debloat.sh`. Recorded from the owner's notes; **not yet re-checked over ADB**
-(the TV was off when this was written; re-run `tv-recon.sh` to confirm).
-- Uninstalled streaming apps with no subscription, including Disney+.
-- Disabled Prime Video (`com.amazon.amazonvideo.livingroom`).
-- Media apps kept: **Apple TV, Netflix, YouTube**. **VLC** is reserved for local media (the SSD).
+Done by hand on the TV, not by `debloat.sh`. Checked over ADB on 2026-11-09 (135 packages now, was 141):
+- Uninstalled: Disney+, MX Player, Nova, WeTV (`com.tencent.qqlivei18n`), myTV SUPER, Youku.
+- Disabled: Prime Video (`com.amazon.amazonvideo.livingroom`), plus Stan and Rakuten (already disabled at purchase).
+- Media apps kept: **Apple TV, Netflix (system app), YouTube (system app)**. **VLC** is reserved for local media (the SSD).
+- Other user apps still installed: YouTube Kids, TV Browser, FM Radio, Note Reminder.
 
 This shapes the couch-tv home config later: those three apps first in the row, VLC next.

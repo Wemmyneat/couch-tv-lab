@@ -42,5 +42,26 @@ it's marked persistent.
 
 ## Later the same day
 Trimmed the streaming apps by hand: uninstalled the ones without a subscription (Disney+ among them) and disabled
-Prime Video. What's left for media is Apple TV, Netflix and YouTube, with VLC kept for local files. Not
-re-checked over ADB yet because the TV was off.
+Prime Video. What's left for media is Apple TV, Netflix and YouTube, with VLC kept for local files. Checked over ADB
+once the TV was back on: Disney+, MX Player, Nova, WeTV, myTV SUPER and Youku uninstalled.
+
+## Phase 2: couch-tv as the home (option A)
+Downloaded the v0.12 `couch-tv-home.apk` from upstream Releases and checked its SHA-256 against the release
+(`b049cb1f…`). couch-tv's `check-tv.py` said A and B are supported and ADB was open on 5555; `survey-tv.py`
+found no ad trackers. Config: one person, Ikole-Ekiti weather, 12-hour clock, all five scenes, dock of 5,
+quick buttons Look and Input, weekly update check.
+
+`apply.sh` installed it, switched Google Ambient (`dreamx`) off, and turned on the Home button watch. The
+TV kept `launcherx` as the Home-key default (normal on some Google TVs), so the watch brings couch-tv back after
+Google's home appears. Pressing Home showed couch-tv with the Waterline scene and the weather.
+
+Findings:
+- The TV's system time zone was **GMT+08:00** (factory/region default) with automatic time zone on, so the
+  clock was wrong. Fix: Settings › System › Date & time, automatic time zone off, time zone Lagos.
+- Keep watching fills from Android's Watch Next list, and the browser app pushes promo cards into it
+  ("Start Searching", "Free Movies & TV"). That's a candidate for a lab-side filter.
+- The dock came up as YouTube, Netflix, Apple TV, BrowseHere and Gallery; VLC was behind More apps. With
+  option A the order is set on the TV (hold OK, Move).
+- Fixed by hand on the TV the same afternoon, checked over ADB: time zone `Africa/Lagos` (the clock matches),
+  dock now YouTube, Netflix, Apple TV, VLC, Browser, and one Google account left after removing the
+  previous owner's.
