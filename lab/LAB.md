@@ -87,3 +87,13 @@ skipped (and logged), never half-run.
 ## Keep watching: `home.watch_next_block`
 Package names whose Android Watch Next rows are promos, not shows: `["com.tcl.browser"]` (TCL BrowseHere's
 "Start Searching" cards).
+
+## Who may use the bridge: `lab.allowed_hosts`, `lab.allowed_origins`
+Upstream couch-tv answered every website (`Access-Control-Allow-Origin: *`), so any page opened on the home network
+could press keys or read data through your browser. couch-tv-lab only answers:
+- **Host names it knows:** localhost, its own hostname and addresses, `bridge.host`, `bridge.fallback_hosts`, plus
+  `lab.allowed_hosts`. Anything else gets 421; this stops DNS rebinding. **Add any name you open the remote by**,
+  e.g. a Tailscale name or an AdGuard rewrite: `"allowed_hosts": ["couch.home.arpa", "wemserver.tailnet.ts.net"]`.
+- **Browser origins:** its own pages, the TV app's saved home (`http://home.tvos.invalid`), plus
+  `lab.allowed_origins` (e.g. a Samsung or LG app's origin). Other sites get 403.
+- Clients that send no Origin (iOS Shortcuts, Hermes over MCP, curl) are unaffected.

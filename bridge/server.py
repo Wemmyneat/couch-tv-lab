@@ -155,30 +155,51 @@ def record_action(request, tool, args, success):
 
 
 # ---------- middleware: CORS + errors ----------
-# couch-tv-lab: the lab and screenshot endpoints carry private data (hub tasks, screenshots, host inventory)
-# and act on it with server-side tokens. The phone remote and the TV home are served by the bridge itself
-# (same origin), and Shortcuts, Hermes (MCP) and curl send no Origin at all; a request whose Origin is some
-# other site is a page elsewhere trying to use the bridge through the person's browser, so it is refused,
-# and these paths get no wildcard CORS header (the preflight included).
-PRIVATE_PATHS = ("/api/lab/", "/api/screenshot")
-
-
-def _foreign_origin(request):
-    origin = request.headers.get("Origin")
-    if not origin:
-        return False
+# couch-tv-lab: who may use the bridge from a browser (security review). Upstream sent
+# "Access-Control-Allow-Origin: *" on every answer, so any web page opened on the home network could press
+# keys, read the screen, or read and act on private data through the person's browser. Now:
+# - Host allowlist: the bridge only answers to names it is known by (its LAN address, localhost, its
+#   hostname, bridge.host / fallback_hosts, lab.allowed_hosts), which defeats DNS rebinding.
+# - Origin allowlist: a browser request must come from the bridge's own pages, from the TV app's saved copy
+#   of the home (http://home.tvos.invalid), or from lab.allowed_origins (e.g. a Samsung or LG app's origin).
+#   Clients that send no Origin (iOS Shortcuts, Hermes over MCP, curl) are unaffected.
+# - CORS echoes an allowed Origin instead of "*".
+def _allowed_hosts():
+    names = {"127.0.0.1", "localhost", "::1", socket.gethostname(), str(config.BRIDGE.get("host") or "")}
+    names |= {str(h) for h in (config.BRIDGE.get("fallback_hosts") or [])}
     try:
-        from urllib.parse import urlsplit
-        return urlsplit(origin).netloc.lower() != (request.host or "").lower()
-    except ValueError:
-        return True
+        names |= set(socket.gethostbyname_ex(socket.gethostname())[2])
+    except OSError:
+        pass
+    lab_cfg = config.CONFIG.get("lab") if isinstance(config.CONFIG.get("lab"), dict) else {}
+    names |= {str(h) for h in (lab_cfg.get("allowed_hosts") or [])}
+    names = {n.lower() for n in names if n}
+    return names | {f"{n}:{PORT}" for n in names} | {f"[{n}]:{PORT}" for n in names if ":" in n}
+
+
+ALLOWED_HOSTS = _allowed_hosts()
+_lab_cfg = config.CONFIG.get("lab") if isinstance(config.CONFIG.get("lab"), dict) else {}
+ALLOWED_ORIGINS = ({f"http://{h}" for h in ALLOWED_HOSTS if ":" in h and not h.startswith("[")}
+                   | {"http://home.tvos.invalid"} | {str(o).rstrip("/") for o in (_lab_cfg.get("allowed_origins") or [])})
+
+
+def _cors(request, resp):
+    origin = request.headers.get("Origin")
+    if origin in ALLOWED_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Ask-Id"
 
 
 @web.middleware
 async def middleware(request, handler):
-    private = request.path.startswith(PRIVATE_PATHS)
-    if private and _foreign_origin(request):
-        log.info("refused %s %s from origin %s", request.method, request.path, request.headers.get("Origin"))
+    if (request.host or "").lower() not in ALLOWED_HOSTS:
+        log.info("refused %s %s for unknown host %r (add it to lab.allowed_hosts)", request.method, request.path, request.host)
+        return web.json_response({"ok": False, "error": "unknown host name for this bridge"}, status=421)
+    origin = request.headers.get("Origin")
+    if origin and origin not in ALLOWED_ORIGINS:
+        log.info("refused %s %s from origin %s", request.method, request.path, origin)
         return web.json_response({"ok": False, "error": "not from this site"}, status=403)
     if request.method == "OPTIONS":
         resp = web.Response(status=204)
@@ -207,10 +228,7 @@ async def middleware(request, handler):
         except Exception as e:
             log.exception("handler failed")
             resp = web.json_response({"ok": False, "error": f"bridge error: {e}"}, status=500)
-    if not private:
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Ask-Id"
+    _cors(request, resp)
     return resp
 
 
@@ -315,7 +333,8 @@ def push_now():
 async def h_events(request):
     resp = web.StreamResponse(headers={
         "Content-Type": "text/event-stream", "Cache-Control": "no-cache",
-        "Access-Control-Allow-Origin": "*", "X-Accel-Buffering": "no"})
+        "X-Accel-Buffering": "no"})
+    _cors(request, resp)   # an allowed Origin only (the middleware has already refused the rest)
     await resp.prepare(request)
     q = asyncio.Queue()
     entry = (q, _current.get())
