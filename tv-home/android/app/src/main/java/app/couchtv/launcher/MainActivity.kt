@@ -90,7 +90,7 @@ class MainActivity : Activity() {
         main.postDelayed({ CrashGuard.settled(this) }, CrashGuard.SETTLE_MS)
         // Lets a computer inspect the page over ADB (chrome://inspect). Only reachable with ADB access.
         // Right after power on the TV's WebView can still be getting ready: never crash over it.
-        runCatching { WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG) }
+        runCatching { WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG || BuildConfig.WEB_DEBUG) }
         CrashGuard.install(this)   // the WebView puts its own crash handler in front: ours goes first again
         root = FrameLayout(this).apply { setBackgroundColor(GROUND) }
         setContentView(root)

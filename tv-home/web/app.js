@@ -283,6 +283,20 @@
   }
   function mark(name) { try { performance.mark(name); } catch (e) {} }
 
+  // couch-tv-lab: the Lab strip. The bridge shapes every value (bridge/lab.py); this only draws
+  // them. Display only: nothing here takes focus, so the remote moves exactly as before.
+  function refreshLab() {
+    var el = $("lab-strip");
+    if (!el) return;
+    if (OFFLINE || !NIGHT) { el.innerHTML = ""; return; }
+    api("GET", "/api/lab/page/home", null, 15000).then(function (j) {
+      el.innerHTML = (j.widgets || []).filter(function (w) { return w.type === "stat" || w.type === "text"; }).map(function (w) {
+        return '<div class="lab-card' + (w.ok ? "" : " bad") + (w.type === "text" ? " text" : "") + '"><small>' + esc(w.title) + '</small><b>' +
+          esc(w.ok ? w.value : "–") + "</b>" + (w.ok && w.sub ? "<span>" + esc(w.sub) + "</span>" : "") + "</div>";
+      }).join("");
+    }, function () { el.innerHTML = ""; });
+  }
+
   function api(method, path, body, timeoutMs) {
     if (TV_ID) {
       if (method === "GET") path += (path.indexOf("?") < 0 ? "?" : "&") + "tv=" + TV_ID;
@@ -865,7 +879,12 @@
   }
   // Start the page again, so a new look or new settings take effect everywhere at once.
   function restart() {
-    location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
+    var to = location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, "");
+    // couch-tv-lab: the TV app's WebView blocks navigations (shouldOverrideUrlLoading returns true), so a
+    // replace() to the same address never happened and a new look only showed after an app restart.
+    // A reload is not a navigation it intercepts.
+    if (to === location.href) location.reload();
+    else location.replace(to);
   }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
   // or straight from the launcher when there is no bridge (only where the TV has such a screen).
@@ -2859,11 +2878,17 @@
     }
   }
 
+  // couch-tv-lab: home.watch_next_block, apps whose Watch Next rows are promos, not something you watched
+  function wnAllowed(r) {
+    var block = Array.isArray(HOME.watch_next_block) ? HOME.watch_next_block : [];
+    return !(r && block.indexOf(r.package || (r.app && r.app.package)) >= 0);
+  }
+
   function sendWatchNext() {
     if (!TV || !TV.watchNext) return Promise.resolve();
     var rows = [];
     try { rows = JSON.parse(TV.watchNext()) || []; } catch (e) {}
-    rows = rows.filter(function (r) { return r.package && r.title; }).map(function (r) {
+    rows = rows.filter(function (r) { return r.package && r.title && wnAllowed(r); }).map(function (r) {
       return { package: r.package, title: r.title, episode_title: r.episode_title || null,
         season: r.season || null, episode: r.episode || null, engaged: r.engaged || 0 };
     });
@@ -2882,6 +2907,7 @@
       if (TV && TV.watchNext) {
         var wn = [];
         try { wn = JSON.parse(TV.watchNext()) || []; } catch (e) {}
+        wn = wn.filter(wnAllowed);
         PEOPLE.forEach(function (p) { data.showsBy[p.id] = wn; });
       }
       detectNew();
@@ -2986,6 +3012,8 @@
     if (!OFFLINE) refreshQuick();
     refreshMusic();
     setInterval(refreshMusic, 5000);
+    refreshLab();
+    setInterval(refreshLab, 60000);
     // This TV says who is on its couch first, so what plays here is logged for them (each TV
     // keeps its own); then the lists. Once the home is up: the one-time "tell you about new versions?" question.
     var hello = OFFLINE ? Promise.resolve() : api("POST", "/api/who", { who: who }).catch(function () {});

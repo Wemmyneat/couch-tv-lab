@@ -929,3 +929,14 @@ html.still .tile.focus .face, html.still .tile.focus .face::after { animation: n
 .theme-night .np-t small { font-size: 1.25rem; line-height: 1.625rem; }
 .theme-night.gearing .np-slot, .theme-night.apping .np-slot { opacity: 0; }
 .no-flex-gap.theme-night .shelf-row > * + * { margin-left: 1.375rem; }
+
+/* couch-tv-lab: the Lab strip (homelab cards), Night look only, under the quick buttons on the right */
+.lab-strip { position: fixed; z-index: 2; right: var(--safe-x); top: 8.5rem; width: 17rem; display: flex; flex-direction: column; gap: 0.625rem; pointer-events: none; }
+.lab-strip:empty { display: none; }
+.lab-strip .lab-card { padding: 0.75rem 1rem; border-radius: 1.125rem; background: rgba(16, 16, 20, 0.42);
+  -webkit-backdrop-filter: blur(1rem); backdrop-filter: blur(1rem); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.lab-strip small { display: block; font-size: 0.9375rem; font-weight: 600; color: rgba(255, 255, 255, 0.66); }
+.lab-strip b { display: block; font-size: 1.75rem; line-height: 2.125rem; font-weight: 650; color: #fff; font-variant-numeric: tabular-nums; }
+.lab-strip .text b { font-size: 1.125rem; line-height: 1.4rem; }
+.lab-strip span { display: block; font-size: 0.9375rem; color: rgba(255, 255, 255, 0.66); margin-top: 0.125rem; }
+.lab-strip .bad { box-shadow: inset 0 0 0 1px rgba(255, 90, 90, 0.5); }

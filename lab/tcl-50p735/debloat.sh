@@ -10,7 +10,7 @@ set -euo pipefail
 MODE="${1:-plan}"; TV="${2:?usage: debloat.sh plan|apply|undo <tv-ip>}:5555"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 LIST="$DIR/debloat.txt"
-GUARD='^(com\.google\.android\.apps\.tv\.launcherx|com\.google\.android\.tungsten\.setupwraith|com\.google\.android\.katniss|com\.google\.android\.tv\.assistant|com\.google\.android\.gms|com\.google\.android\.gsf|com\.google\.android\.webview|com\.google\.android\.apps\.mediashell|com\.tcl\.tv|com\.tcl\.tvinput|com\.tcl\.system\.server|com\.tcl\.settings|com\.tcl\.tcl_bt_rcu_service|com\.tcl\.autopair|com\.tcl\.micmanager|com\.android\..*)$'
+GUARD='^(com\.google\.android\.apps\.tv\.launcherx|com\.google\.android\.tungsten\.setupwraith|com\.google\.android\.gms|com\.google\.android\.gsf|com\.google\.android\.webview|com\.google\.android\.apps\.mediashell|com\.tcl\.tv|com\.tcl\.tvinput|com\.tcl\.system\.server|com\.tcl\.settings|com\.tcl\.tcl_bt_rcu_service|com\.tcl\.autopair|com\.tcl\.micmanager|com\.android\..*)$'
 
 sh_() { adb -s "$TV" shell "$@" | tr -d '\r'; }
 adb connect "$TV" >/dev/null

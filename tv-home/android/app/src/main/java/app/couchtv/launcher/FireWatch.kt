@@ -70,7 +70,13 @@ class FireWatch : AccessibilityService() {
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        stockInFront = isStockHome(e.packageName?.toString(), e.className?.toString())
+        val pkg = e.packageName?.toString()
+        // couch-tv-lab: couch-tv's own window events don't say who is in front. When the Google home and
+        // couch-tv start within the same second (a Home press while a cast ends, two Home events 0.1 s
+        // apart: seen on a TCL 50P735), couch-tv's event can arrive after the Google home went back on
+        // top, and clearing stockInFront here cancelled the one re-check. Only another app clears it.
+        if (pkg == packageName) return
+        stockInFront = isStockHome(pkg, e.className?.toString())
         if (!stockInFront) return
         if (CrashGuard.standingAside(this)) return
         val wait = DEBOUNCE_MS - (System.currentTimeMillis() - last)

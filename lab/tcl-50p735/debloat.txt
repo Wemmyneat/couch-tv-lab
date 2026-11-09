@@ -30,7 +30,7 @@ com.tcl.gamebar                             # game overlay
 com.tcl.ocean.instructions                  # e-manual
 com.tcl.keyhelp                             # remote key help
 com.tcl.ui_mediaCenter                      # TCL USB media player (you have VLC and Nova for the SSD)
-com.tcl.browser                             # TCL browser (TV Browser is installed)
+com.tcl.browser                             # TCL "BrowseHere": pushes promo cards into Watch Next; re-enabled itself once
 com.tcl.messagebox                          # TCL message/notification box (13 MB)
 com.tcl.useragreement                       # TCL terms prompts
 com.tcl.t_solo                              # TCL solo/promo service
@@ -45,8 +45,12 @@ com.tcl.assistant                           # [+] TCL's own voice assistant
 com.tcl.MultiScreenInteraction_TV           # [+] TCL phone-app link/T-Cast (18 MB). couch-tv and Google remotes replace it.
 com.tcl.usercenter                          # [+] TCL account
 
+# --- 5. Voice, off by owner's choice (2026-11-09): the phone remote and iOS Shortcuts replace it ---
+com.google.android.katniss                  # Google Assistant / voice search (~60 MB)
+com.google.android.tv.assistant             # Assistant on Google TV
+
 # --- KEEP (never put these in this list) ---
-# launcherx, tungsten.setupwraith (couch-tv boot-loop lesson), katniss, tv.assistant (phone-remote voice),
+# launcherx, tungsten.setupwraith (couch-tv boot-loop lesson),
 # tcl.tv, tcl.tvinput, tcl.system.server, tcl.settings, tcl_bt_rcu_service, autopair, micmanager (the remote),
 # tcl.inputmethod.international, mediashell (Chromecast), miracast, gms, gsf, google.android.webview,
 # tts, talkback, tcl.gallery, providers.*, packageinstaller, permissioncontroller

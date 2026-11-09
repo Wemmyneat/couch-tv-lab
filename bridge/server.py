@@ -887,6 +887,8 @@ import agentic  # noqa: E402  (the ask's eyes, installs, inputs, off after this 
 import sys as _sys  # noqa: E402
 
 agentic.S = _sys.modules[__name__]
+import lab  # noqa: E402  (couch-tv-lab: custom remote buttons and screenshot saving)
+lab.S = _sys.modules[__name__]
 
 
 async def recs_refresh_soon():
@@ -2276,6 +2278,7 @@ def make_app():
     r.add_post("/api/volume", h_volume)
     r.add_get("/api/screenshot", h_screenshot)
     agentic.routes(r)
+    lab.routes(r)
     r.add_route("OPTIONS", "/api/{tail:.*}", h_options)
     r.add_route("*", "/api/{tail:.*}", h_api_missing)
     r.add_get("/tv", h_tv_redirect)

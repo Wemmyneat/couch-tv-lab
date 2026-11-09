@@ -38,3 +38,14 @@ export const Send = (p) => <I d="M12 19V5M6 11l6-6 6 6" {...p} />;
 export const Wifi = (p) => <I {...p}><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12.2a10 10 0 0 1 13 0M9 15.8a5 5 0 0 1 6 0" /><circle cx="12" cy="19" r="1" fill="currentColor" /></I>;
 export const Sparkle = (p) => <I d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" {...p} />;
 export const People = (p) => <I {...p}><circle cx="9" cy="8" r="3.2" /><path d="M3 19.5a6 6 0 0 1 12 0" /><circle cx="17" cy="9" r="2.6" /><path d="M15.5 14.2a5 5 0 0 1 5.5 4.8" /></I>;
+
+// couch-tv-lab: icons for custom buttons (lab.buttons in config.json)
+export const Camera = (p) => <I {...p}><path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></I>;
+export const Bolt = (p) => <I d="M13 3 5 13.5h6L10 21l8-10.5h-6z" {...p} />;
+export const Chart = (p) => <I d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3" {...p} />;
+export const Server = (p) => <I {...p}><rect x="4" y="4" width="16" height="7" rx="1.5" /><rect x="4" y="13" width="16" height="7" rx="1.5" /><path d="M8 7.5h.01M8 16.5h.01" /></I>;
+export const Music = (p) => <I {...p}><path d="M9 18V5l10-2v13" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="16.5" cy="16" r="2.5" /></I>;
+export const Film = (p) => <I {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 5v14M17 5v14M3 9.5h4M17 9.5h4M3 14.5h4M17 14.5h4" /></I>;
+export const Star = (p) => <I d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z" {...p} />;
+export const Link = (p) => <I d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" {...p} />;
+export const Game = (p) => <I {...p}><path d="M7 8h10a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6h-4A4 4 0 0 1 3 13v-1a4 4 0 0 1 4-4z" /><path d="M8 11v3M6.5 12.5h3M15.5 12h.01M17.5 13.5h.01" /></I>;

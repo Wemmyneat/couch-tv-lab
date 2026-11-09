@@ -6,8 +6,9 @@ import * as Ic from './icons.jsx';
 import { TopBar, NowPlaying, Pad, Controls, AskButton } from './Remote.jsx';
 import { Watch } from './Watch.jsx';
 import { AskSheet, MoreSheet, ArrangeSheet, PeopleSheet, Onboarding } from './Sheets.jsx';
-import { usePullDown, usePageDrag } from './gestures.js';
+import { usePullDown, usePageDrag, TABS } from './gestures.js';
 import { t, useLang, setTvLang } from './i18n.js';
+import { LabButtons, LabPage, labResult } from './Lab.jsx';
 
 const store = {
   get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -303,19 +304,19 @@ export default function App() {
   // tab that is showing, so the visible page and the active tab always agree.
   useEffect(() => {
     const el = pager.current; if (wide || !el) return;
-    el.scrollLeft = tab === 'watch' ? el.clientWidth : 0;
-    tabsRef.current?.style.setProperty('--p', tab === 'watch' ? '1' : '0');
+    el.scrollLeft = Math.max(0, TABS.indexOf(tab)) * el.clientWidth;
+    tabsRef.current?.style.setProperty('--p', String(Math.max(0, TABS.indexOf(tab))));
   }, [wide, w]); // eslint-disable-line react-hooks/exhaustive-deps
   const goTo = (t) => {
     tick(); const el = pager.current;
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (el) el.scrollTo({ left: t === 'watch' ? el.clientWidth : 0, behavior: still ? 'auto' : 'smooth' });
+    if (el) el.scrollTo({ left: Math.max(0, TABS.indexOf(t)) * el.clientWidth, behavior: still ? 'auto' : 'smooth' });
     setTab(t);
   };
   const onPage = (e) => {
     const el = e.currentTarget; const p = el.scrollLeft / Math.max(1, el.clientWidth);
-    tabsRef.current?.style.setProperty('--p', Math.min(1, Math.max(0, p)).toFixed(3));
-    const t = p > 0.5 ? 'watch' : 'remote';
+    tabsRef.current?.style.setProperty('--p', Math.min(TABS.length - 1, Math.max(0, p)).toFixed(3));
+    const t = TABS[Math.min(TABS.length - 1, Math.max(0, Math.round(p)))];
     if (t !== tab) setTab(t);
   };
   // The pill can be dragged like the iPhone home bar, and the whole dock (Ask and the tabs) takes a
@@ -327,6 +328,7 @@ export default function App() {
       <span className="tabs-thumb" aria-hidden="true" />
       <button className={tab === 'remote' ? 'on' : ''} aria-current={tab === 'remote'} onClick={() => goTo('remote')}><Ic.Remote size={18} /> {t('remote')}</button>
       <button className={tab === 'watch' ? 'on' : ''} aria-current={tab === 'watch'} onClick={() => goTo('watch')}><Ic.Grid size={18} /> {t('watch')}</button>
+      <button className={tab === 'lab' ? 'on' : ''} aria-current={tab === 'lab'} onClick={() => goTo('lab')}><Ic.Chart size={18} /> Lab</button>
     </nav>
   );
 
@@ -340,6 +342,7 @@ export default function App() {
       <Pad onKey={onKey} offState={offState} wakeError={wakeError} onWake={onWake} onRetry={onRetry}
         tvName={thisTv?.name} onLivingRoom={() => { tick(); chooseTv(null); }} />
       <Controls tv={tv} onKey={onKey} onVolume={onVolume} />
+      <LabButtons reach={reach} onResult={(r) => { const m = labResult(r); say(m.text, m.kind); }} onError={(e) => say(e.message, 'err')} />
       {wide && askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
     </div>
   );
@@ -353,12 +356,13 @@ export default function App() {
           <button onClick={() => { tick(); onRetry(); }}>{t('try_again')}</button></div>
       )}
       {wide ? (
-        <main className="split">{remote}<div className="watch-col">{watch}</div></main>
+        <main className="split">{remote}<div className="watch-col">{watch}<LabPage reach={reach} active /></div></main>
       ) : (
         <main className="single">
           <div ref={pager} className="pager" onScroll={onPage}>
             <section className="page" aria-label="Remote" inert={tab !== 'remote'}>{remote}</section>
             <section className="page watch-page" aria-label="Watch" inert={tab !== 'watch'}>{watch}</section>
+            <section className="page lab-page" aria-label="Lab" inert={tab !== 'lab'}><LabPage reach={reach} active={tab === 'lab'} /></section>
           </div>
           <div className="dock" {...dockDrag}>
             {askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}

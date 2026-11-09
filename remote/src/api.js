@@ -58,6 +58,12 @@ export const api = {
   setSleep: (minutes) => call('POST', '/api/sleep', { minutes }),
   openScreen: (id) => call('POST', '/api/screens/open', { id }),
   tvs: () => call('GET', '/api/tvs'),
+  // couch-tv-lab (bridge/lab.py)
+  labButtons: () => call('GET', '/api/lab/buttons'),
+  labAction: (id) => call('POST', `/api/lab/action/${encodeURIComponent(id)}`, {}, 60000),
+  screenshots: () => call('GET', '/api/screenshots'),
+  labPages: () => call('GET', '/api/lab/pages'),
+  labPage: (id) => call('GET', `/api/lab/page/${encodeURIComponent(id)}`, null, 20000),
   picture: (mode) => call('POST', '/api/picture', { mode }, 20000),   // a picture switch can take several seconds
   appOrder: () => call('GET', '/api/app-order'),
   saveAppOrder: (order, line) => call('POST', '/api/app-order', { order, line }),
