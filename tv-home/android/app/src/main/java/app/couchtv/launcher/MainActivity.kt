@@ -489,6 +489,16 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- what the page can ask for
 
     inner class Native {
+        /**
+         * couch-tv-lab: reload the home page. The page cannot do it itself: shouldOverrideUrlLoading
+         * (below) blocks every navigation it starts, location.reload() included, so a new look or new
+         * settings never showed until the app restarted. A WebView reload from here is not intercepted.
+         */
+        @JavascriptInterface
+        fun reload() {
+            main.post { web?.reload() }
+        }
+
         @JavascriptInterface
         fun apps(): String {
             val out = JSONArray()

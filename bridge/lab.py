@@ -21,6 +21,7 @@ Screenshots go to every target in lab.screenshots.targets:
              reaches the phone or the TV.
 """
 import asyncio
+import json
 import logging
 import os
 import re
@@ -394,8 +395,15 @@ async def render_widget(w):
         if w["source"] == "prometheus":
             res = await _prom(str(w.get("query") or ""), int(w.get("ttl") or 30))
             if w["type"] == "stat":
-                v = res[0]["value"][1] if res else None
-                out["value"] = _fmt(v, fmt, dec, unit)
+                if w.get("value_label"):   # a label as the value, e.g. network_type="5G(NSA)"
+                    out["value"] = str(res[0]["metric"].get(w["value_label"], "–"))[:24] if res else "–"
+                else:
+                    v = res[0]["value"][1] if res else None
+                    out["value"] = _fmt(v, fmt, dec, unit)
+                if w.get("sub_query"):   # a second, smaller line from another query
+                    sub = await _prom(str(w["sub_query"]), int(w.get("ttl") or 30))
+                    out["sub"] = _fmt(sub[0]["value"][1] if sub else None, w.get("sub_format"),
+                                      int(w.get("sub_decimals") or 0), str(w.get("sub_unit") or "")[:8])
             else:
                 lab_key = w.get("label") or "instance"
                 out["items"] = [{"title": str(r["metric"].get(lab_key, "?"))[:40],
@@ -425,6 +433,101 @@ async def render_widget(w):
     return out
 
 
+# ---------- the TV's widget grid ----------
+# lab.widgets is the catalog: widget definitions (as in lab.pages) plus "id" and "sizes" ([[1,1],[2,1]]).
+# Each TV keeps its own layout in data/widgets.<tv>.json: [{"id","x","y","w","h"}] on a GRID_COLS x
+# GRID_ROWS grid. Widgets never stretch to fill space; empty cells stay empty.
+GRID_COLS, GRID_ROWS = 2, 4
+CATALOG = {}
+for _w in (LAB.get("widgets") or [])[:40]:
+    if not isinstance(_w, dict) or not isinstance(_w.get("id"), str) or not ID_RE.fullmatch(_w["id"]) or _w["id"] in CATALOG:
+        continue
+    if _w.get("type") not in TYPES or (_w.get("source") != "prometheus" and _w.get("source") not in SOURCES):
+        log.warning("lab widget %s skipped: unknown type or source", _w.get("id"))
+        continue
+    _sizes = [s for s in (_w.get("sizes") or [[1, 1]]) if isinstance(s, list) and len(s) == 2
+              and all(isinstance(n, int) and not isinstance(n, bool) for n in s) and 1 <= s[0] <= GRID_COLS and 1 <= s[1] <= GRID_ROWS]
+    CATALOG[_w["id"]] = dict(_w, sizes=_sizes or [[1, 1]])
+
+
+def _layout_file(tv_id):
+    return os.path.join(config.DATA, f"widgets.{tv_id}.json")
+
+
+def _valid_layout(items):
+    """Only catalog widgets, once each, in an allowed size, inside the grid, not overlapping."""
+    out, taken = [], set()
+    for it in (items if isinstance(items, list) else [])[:GRID_COLS * GRID_ROWS]:
+        if not isinstance(it, dict) or it.get("id") not in CATALOG or any(o["id"] == it["id"] for o in out):
+            continue
+        try:
+            x, y, w, h = (int(it.get(k, d)) for k, d in (("x", 0), ("y", 0), ("w", 1), ("h", 1)))
+        except (TypeError, ValueError):
+            continue
+        if [w, h] not in CATALOG[it["id"]]["sizes"] or x < 0 or y < 0 or x + w > GRID_COLS or y + h > GRID_ROWS:
+            continue
+        cells = {(cx, cy) for cx in range(x, x + w) for cy in range(y, y + h)}
+        if cells & taken:
+            continue
+        taken |= cells
+        out.append({"id": it["id"], "x": x, "y": y, "w": w, "h": h})
+    return out
+
+
+def _default_layout():
+    """lab.default_layout if given, else the catalog in order, each at its first size, first free spot."""
+    if isinstance(LAB.get("default_layout"), list):
+        return _valid_layout(LAB["default_layout"])
+    placed = []
+    for wid, w in CATALOG.items():
+        cw, ch = w["sizes"][0]
+        for y in range(GRID_ROWS):
+            spot = next((x for x in range(GRID_COLS - cw + 1)
+                         if _valid_layout(placed + [{"id": wid, "x": x, "y": y, "w": cw, "h": ch}]) != _valid_layout(placed)), None)
+            if spot is not None:
+                placed = _valid_layout(placed + [{"id": wid, "x": spot, "y": y, "w": cw, "h": ch}])
+                break
+    return placed
+
+
+def load_layout(tv_id):
+    try:
+        with open(_layout_file(tv_id)) as f:
+            return _valid_layout(json.load(f))
+    except (OSError, ValueError):
+        return _default_layout()
+
+
+async def h_widgets(request):
+    return S.ok(cols=GRID_COLS, rows=GRID_ROWS, widgets=[
+        {"id": w["id"], "title": str(w.get("title") or w["id"])[:40], "type": w["type"], "sizes": w["sizes"],
+         "note": str(w.get("note") or "")[:60]} for w in CATALOG.values()])
+
+
+async def h_layout_get(request):
+    tv_id = _tv_id(request)
+    items = load_layout(tv_id)
+    rendered = await asyncio.gather(*(render_widget(dict(CATALOG[i["id"]], id=i["id"])) for i in items))
+    for i, r in zip(items, rendered):
+        i["widget"] = r
+    return S.ok(tv=tv_id, cols=GRID_COLS, rows=GRID_ROWS, items=items, at=S.now_iso())
+
+
+async def h_layout_post(request):
+    data = await S.body(request)
+    tv_id = _tv_id(request, data)
+    items = _valid_layout(data.get("items"))
+    if len(items) != len(data.get("items") or []):
+        raise S.ApiError(400, "layout refused: unknown widget, size not allowed, outside the grid or overlapping")
+    os.makedirs(config.DATA, exist_ok=True)
+    tmp = _layout_file(tv_id) + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(items, f)
+    os.replace(tmp, _layout_file(tv_id))
+    S.record_action(request, "lab_layout", {"items": len(items)}, True)
+    return S.ok(tv=tv_id, items=items)
+
+
 async def h_pages(request):
     return S.ok(pages=[{"id": p["id"], "title": p["title"], "widgets": len(p["widgets"])} for p in PAGES])
 
@@ -439,6 +542,9 @@ async def h_page(request):
 
 
 def routes(r):
+    r.add_get("/api/lab/widgets", h_widgets)
+    r.add_get("/api/lab/layout", h_layout_get)
+    r.add_post("/api/lab/layout", h_layout_post)
     r.add_get("/api/lab/pages", h_pages)
     r.add_get("/api/lab/page/{id}", h_page)
     r.add_get("/api/lab/buttons", h_buttons)

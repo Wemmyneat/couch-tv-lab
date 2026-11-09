@@ -141,3 +141,7 @@ These replace the matching points above where they differ.
    the tabs, pad speed, audio output.
 5. Screenshots paging and thumbnails.
 6. Fixed addresses and the AdGuard name; then M4 (alerts + Hermes) and powerOS when the EW10A arrives.
+
+**Owner's follow-up (2026-11-09):** the top-bar ⋯ button goes away; ↑ (above the TV Home button) opens a native-style
+**bottom sheet with exactly the current ⋯ menu's content** (TV picker, Type to TV, sleep timer, picture mode, Arrange
+apps, People). New content waits. Play/Pause is the large centre button of the nav row: Mute · Play/Pause · Back.
