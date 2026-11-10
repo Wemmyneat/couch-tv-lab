@@ -97,3 +97,19 @@ could press keys or read data through your browser. couch-tv-lab only answers:
 - **Browser origins:** its own pages, the TV app's saved home (`http://home.tvos.invalid`), plus
   `lab.allowed_origins` (e.g. a Samsung or LG app's origin). Other sites get 403.
 - Clients that send no Origin (iOS Shortcuts, Hermes over MCP, curl) are unaffected.
+
+## DisplayOS on the TV: `lab.wall`
+`"wall": {"config": "/var/lib/couchtv/displayos.yaml"}`. The TV app's Wall screen (`WallActivity.kt`) rotates the same
+dashboards as DisplayOS on the Mac, from a copy of its config:
+- `lab/displayos-sync.sh` copies `~/Library/Application Support/DisplayOS/displayos.yaml` to the bridge;
+  `lab/displayos-sync.sh --watch` installs a LaunchAgent that copies it on every save. No secrets are in that file.
+- Slides show at most **2 dashboards** side by side on the TV (2 GB RAM). The interlude after each slide (clock,
+  weather, verse) covers loading the next slide. Wallpaper and study interludes are Mac-only for now (a Mac folder;
+  a Keychain token).
+- `insecureTLS` dashboards are accepted only with the certificate fingerprint the bridge reads from that host.
+- Quiet hours: the wall goes black and lets the TV sleep.
+- Start it: Lab › Show DisplayOS, a `{"wall": true}` button step, `POST /api/lab/wall/show`, or Hermes' `show_displayos`.
+  It resumes where it stopped. On the TV: ← / → previous / next, OK pauses (then the remote drives the page: log in,
+  scroll), Back resumes, Back again leaves.
+- Logins: dashboards keep their sessions in the TV's WebView. Log in once on the TV (pause, then type with the
+  phone's Type to TV), or give Grafana an anonymous viewer or a public dashboard link.

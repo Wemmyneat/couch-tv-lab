@@ -299,5 +299,12 @@ def screenshot_save(tv: str | None = None) -> dict:
     return call("POST", "/api/screenshot/save", {}, tv=tv, timeout=90)
 
 
+
+@mcp.tool()
+def show_displayos(tv: str | None = None) -> dict:
+    """Put the DisplayOS dashboard wall on the TV, full screen, resuming where it left off. Back on the TV remote leaves it."""
+    return call("POST", "/api/lab/wall/show", {}, tv=tv, timeout=30)
+
+
 if __name__ == "__main__":
     mcp.run()

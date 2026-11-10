@@ -4,3 +4,4 @@ androidtvremote2==0.3.2
 mcp==1.30.0
 rsa==4.9.1
 zeroconf==0.151.5
+PyYAML==6.0.3

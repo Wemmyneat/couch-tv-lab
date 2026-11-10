@@ -73,6 +73,8 @@ def _step(s):
         return {kind: True}
     if kind == "open" and isinstance(v, str) and ID_RE.fullmatch(v):   # a page from lab.links, opened on the TV
         return {kind: v}
+    if kind == "wall" and v is True:   # DisplayOS on the TV, resuming where it left off
+        return {kind: True}
     if kind == "wait" and isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= MAX_WAIT:
         return {kind: float(v)}
     return None
@@ -141,6 +143,8 @@ async def run_step(step, tv_id):
         return await save_screenshot(tv_id)
     if kind == "open":
         return await open_on_tv(v, tv_id)
+    if kind == "wall":
+        return await show_wall(tv_id)
     raise RuntimeError(f"unknown step {kind}")
 
 
@@ -597,13 +601,13 @@ async def h_status(request):
         except Exception as e:
             log.info("hub status failed: %s", e)
             chips.append({"id": "hub", "label": "Hub", "state": "down"})
-    for pid in PVE:
-        try:
-            sm = await pve_summary(pid)
-            chips.append({"id": pid, "label": f"{sm['label']} · {sm['cpu']}% · {sm['mem_gb']}/{sm['memtotal_gb']} GB", "state": "ok", "pve": True})
-        except Exception as e:
-            log.info("proxmox %s chip failed: %s", pid, e)
+    pve_res = await asyncio.gather(*(asyncio.wait_for(pve_summary(p), 6) for p in PVE), return_exceptions=True)
+    for pid, sm in zip(PVE, pve_res):
+        if isinstance(sm, Exception):
+            log.info("proxmox %s chip failed: %s", pid, sm)
             chips.append({"id": pid, "label": PVE[pid]["label"], "state": "down", "pve": True})
+        else:
+            chips.append({"id": pid, "label": f"{sm['label']} · {sm['cpu']}% · {sm['mem_gb']}/{sm['memtotal_gb']} GB", "state": "ok", "pve": True})
     ups = await asyncio.gather(*(_reachable(h["host"], h["port"]) for h in HOSTS))
     chips += [{"id": h["id"], "label": str(h.get("label") or h["id"])[:20], "state": "ok" if up else "down"} for h, up in zip(HOSTS, ups)]
     if LAB.get("power_pending"):
@@ -658,21 +662,36 @@ for _p in (LAB.get("proxmox") or [])[:8]:
         PVE[_p["id"]] = dict(_p, label=str(_p.get("label") or _p["id"])[:20])
 
 
+class PveCertMismatch(RuntimeError):
+    pass
+
+
 async def _pve(p, path):
     tok = os.environ.get(p["token_env"])
     if not tok:
-        raise RuntimeError(f"{p['token_env']} is not set in .env")
+        raise RuntimeError("not configured")
     fp = aiohttp.Fingerprint(bytes.fromhex(p["fingerprint"].replace(":", "")))
     url = f"https://{p['host']}:8006/api2/json{path}"
     hit = _cache.get(url)
     if hit and hit[0] > time.time():
+        if isinstance(hit[1], Exception):   # failures are remembered briefly too: a down host is not re-dialled per poll
+            raise hit[1]
         return hit[1]
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as s:
-        async with s.get(url, headers={"Authorization": f"PVEAPIToken={tok}"}, ssl=fp) as r:
-            if r.status >= 300:
-                raise RuntimeError(f"Proxmox answered {r.status}")
-            data = (await r.json(content_type=None)).get("data")
-    _cache[url] = (time.time() + 15, data)
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as s:
+            async with s.get(url, headers={"Authorization": f"PVEAPIToken={tok}"}, ssl=fp) as r:
+                if r.status >= 300:
+                    raise RuntimeError(f"Proxmox answered {r.status}")
+                data = (await r.json(content_type=None)).get("data")
+    except aiohttp.ServerFingerprintMismatch as e:
+        log.warning("proxmox %s: certificate does not match the pinned fingerprint (%s)", p["id"], e)
+        err = PveCertMismatch("certificate does not match the pinned one")
+        _cache[url] = (time.time() + 60, err)
+        raise err
+    except Exception as e:
+        _cache[url] = (time.time() + 20, e if isinstance(e, RuntimeError) else RuntimeError("not answering"))
+        raise
+    _cache[url] = (time.time() + 30, data)
     return data
 
 
@@ -687,6 +706,7 @@ async def pve_summary(pid):
                                                   _pve(p, f"{node}/storage"), return_exceptions=True)
     if isinstance(st, Exception):
         raise st
+    partial = [n for n, r in (("guests", lxc), ("guests", qemu), ("storage", storage)) if isinstance(r, Exception)]
     guests = []
     for kind, rows in (("ct", lxc), ("vm", qemu)):
         for g in (rows if isinstance(rows, list) else []):
@@ -699,19 +719,152 @@ async def pve_summary(pid):
             "mem_gb": _gb((st.get("memory") or {}).get("used")), "memtotal_gb": _gb((st.get("memory") or {}).get("total")),
             "root_gb": _gb((st.get("rootfs") or {}).get("used")), "roottotal_gb": _gb((st.get("rootfs") or {}).get("total")),
             "uptime_h": int((st.get("uptime") or 0) // 3600), "load": (st.get("loadavg") or [None])[0],
-            "guests": sorted(guests, key=lambda g: g["id"]), "storage": disks}
+            "guests": sorted(guests, key=lambda g: g["id"]), "storage": disks, "partial": sorted(set(partial))}
 
 
 async def h_host(request):
     pid = request.match_info["id"]
     if pid not in PVE:
-        raise S.ApiError(404, f"no lab.proxmox host {pid!r}")
+        raise S.ApiError(404, "no such host")
     try:
-        return S.ok(**await pve_summary(pid))
+        body = {"ok": True, **await pve_summary(pid)}
     except Exception as e:
         log.info("proxmox %s failed: %s", pid, e)
-        return S.ok(id=pid, label=PVE[pid]["label"], online=False,
-                    error=str(e)[:120] if isinstance(e, RuntimeError) else "not answering")
+        body = {"ok": True, "id": pid, "label": PVE[pid]["label"], "online": False,
+                "error": str(e) if isinstance(e, PveCertMismatch) else "not answering"}
+    return web.json_response(body, headers={"Cache-Control": "no-store"})
+
+
+# ---------- DisplayOS wall on the TV ----------
+# The TV app's Wall screen (WallActivity) rotates the same dashboards as DisplayOS on the Mac. The bridge
+# reads a copy of displayos.yaml (lab.wall.config, synced from the Mac by lab/displayos-sync.sh) and turns
+# it into a plan the TV follows: slides of at most WALL_PANES dashboards side by side, an interlude after
+# every N slides (clock, weather, verse), and quiet hours. Self-signed dashboards (insecureTLS) are pinned:
+# the TV accepts only the certificate fingerprint the bridge reports for that host.
+WALL = LAB.get("wall") if isinstance(LAB.get("wall"), dict) else {}
+WALL_PANES = 2          # a 2 GB TV keeps two dashboards on screen; the interlude covers loading the next slide
+_wall_cache = {"mtime": None, "plan": None}
+_fp_cache = {}
+TV_INTERLUDES = ("clock", "weather", "verse")
+
+
+def _cert_fp(host, port):
+    import ssl
+    key = f"{host}:{port}"
+    hit = _fp_cache.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    try:
+        import hashlib
+        pem = ssl.get_server_certificate((host, port), timeout=4)
+        fp = hashlib.sha256(ssl.PEM_cert_to_DER_cert(pem)).hexdigest().upper()
+    except Exception as e:
+        log.info("wall: no certificate from %s: %s", key, e)
+        fp = None
+    _fp_cache[key] = (time.time() + 3600, fp)
+    return fp
+
+
+def _wall_plan():
+    import yaml
+    from urllib.parse import urlsplit
+    path = WALL.get("config")
+    if not isinstance(path, str) or not path.startswith("/"):
+        raise RuntimeError("lab.wall.config is not set")
+    mtime = os.path.getmtime(path)
+    if _wall_cache["mtime"] == mtime:
+        return _wall_cache["plan"]
+    with open(path) as f:
+        cfg = yaml.safe_load(f) or {}
+    default = int(cfg.get("defaultDuration") or 300)
+    dash, pins = {}, {}
+    for d in cfg.get("dashboards") or []:
+        if not isinstance(d, dict) or d.get("enabled") is False or not ID_RE.fullmatch(str(d.get("id") or "")):
+            continue
+        url = str(d.get("url") or "")
+        if not URL_RE.fullmatch(url):
+            continue
+        u = urlsplit(url)
+        item = {"id": d["id"], "name": str(d.get("name") or d["id"])[:60], "url": url,
+                "duration": int(d.get("duration") or default), "refresh": int(d.get("refresh") or 0),
+                "zoom": float(d.get("zoom") or 1), "css": str(d.get("css") or "")[:4000]}
+        if d.get("insecureTLS") and u.scheme == "https":
+            port = u.port or 443
+            fp = _cert_fp(u.hostname, port)
+            if fp:
+                pins[f"{u.hostname}:{port}"] = fp
+        dash[d["id"]] = item
+    slides = []
+    for s in (cfg.get("slides") or [[k] for k in dash]):
+        if isinstance(s, str):
+            ids, name, dur = [s], None, None
+        elif isinstance(s, list):
+            ids, name, dur = s, None, None
+        elif isinstance(s, dict):
+            show = s.get("show")
+            ids, name, dur = (show if isinstance(show, list) else [show]), s.get("name"), s.get("duration")
+        else:
+            continue
+        ids = [i for i in ids if i in dash][:WALL_PANES]
+        if not ids:
+            continue
+        slides.append({"name": str(name or " · ".join(dash[i]["name"] for i in ids))[:60], "ids": ids,
+                       "duration": int(dur or max(dash[i]["duration"] for i in ids))})
+    inter = cfg.get("interludes") if isinstance(cfg.get("interludes"), dict) else {}
+    items = [{"type": i["type"], "duration": int(i.get("duration") or inter.get("duration") or 30)}
+             for i in (inter.get("items") or []) if isinstance(i, dict) and i.get("type") in TV_INTERLUDES]
+    q = cfg.get("quietHours") if isinstance(cfg.get("quietHours"), dict) else {}
+    plan = {"dashboards": dash, "slides": slides, "pins": pins,
+            "interludes": {"every": int(inter.get("every") or 0), "items": items},
+            "quiet": {"start": str(q.get("start") or ""), "end": str(q.get("end") or "")},
+            "transition_ms": int(cfg.get("transitionMs") or 900)}
+    _wall_cache.update(mtime=mtime, plan=plan)
+    return plan
+
+
+async def h_wall(request):
+    try:
+        plan = await asyncio.to_thread(_wall_plan)
+    except (OSError, RuntimeError) as e:
+        raise S.ApiError(404, f"no DisplayOS config on the bridge ({e})")
+    return S.ok(**plan)
+
+
+async def h_wall_interlude(request):
+    """What the interlude page shows: the verse from the hub and the weather (Open-Meteo, no key)."""
+    out = {"place": None, "temp": None, "code": None, "verse": None}
+    wx = config.CONFIG.get("weather") if isinstance(config.CONFIG.get("weather"), dict) else {}
+    if isinstance(wx.get("lat"), (int, float)) and isinstance(wx.get("lon"), (int, float)):
+        try:
+            j = await _get_json(f"https://api.open-meteo.com/v1/forecast?latitude={wx['lat']}&longitude={wx['lon']}"
+                                "&current=temperature_2m,weather_code&timezone=auto", {}, 600)
+            out.update(place=str(wx.get("place") or "")[:40], temp=(j.get("current") or {}).get("temperature_2m"),
+                       code=(j.get("current") or {}).get("weather_code"))
+        except Exception as e:
+            log.info("wall weather failed: %s", e)
+    if HUB:
+        try:
+            v = ((await _source(HUB)).get("verses") or [None])[0] or {}
+            out["verse"] = {"text": str(v.get("text") or "")[:400], "ref": str(v.get("reference") or "")[:60]}
+        except Exception as e:
+            log.info("wall verse failed: %s", e)
+    return S.ok(**out)
+
+
+async def show_wall(tv_id):
+    tok = S._current.set(tv_id)
+    try:
+        await S.tv.adb("shell", "am", "start", "-n", "app.couchtv.launcher/.WallActivity", "--ez", "resume", "true")
+    finally:
+        S._current.reset(tok)
+    return {"note": "DisplayOS is on the TV"}
+
+
+async def h_wall_show(request):
+    data = await S.body(request)
+    r = await show_wall(_tv_id(request, data))
+    S.record_action(request, "wall_show", {}, True)
+    return S.ok(**r)
 
 
 async def h_open(request):
@@ -728,6 +881,9 @@ def routes(r):
     r.add_get("/api/lab/status", h_status)
     r.add_post("/api/lab/open/{id}", h_open)
     r.add_get("/api/lab/host/{id}", h_host)
+    r.add_get("/api/lab/wall", h_wall)
+    r.add_get("/api/lab/wall/interlude", h_wall_interlude)
+    r.add_post("/api/lab/wall/show", h_wall_show)
     r.add_get("/api/lab/hub", h_hub)
     r.add_post("/api/lab/hub/action", h_hub_action)
     r.add_get("/api/lab/widgets", h_widgets)

@@ -121,7 +121,7 @@ function HostSheet({ chip, links, onClose, onSaid }) {
     let live = true;
     const load = () => api.labHost(chip.id).then((r) => live && setD(r)).catch((e) => live && setD({ online: false, error: e.message }));
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 30000);
     return () => { live = false; clearInterval(t); };
   }, [chip]);
   const link = (links || []).find((l) => l.id === `proxmenux${(chip?.id || '').replace(/\D/g, '')}`);
@@ -142,6 +142,7 @@ function HostSheet({ chip, links, onClose, onSaid }) {
           {(d.storage || []).map((x) => <Bar key={x.name} label={x.name} used={x.used_gb} total={x.total_gb} />)}
         </>)}
         {link && <button className="lab-tile glass small" onClick={() => { tick(); api.labOpen(link.id).then((r) => onSaid?.(r.note || 'Opened on the TV'), (e) => onSaid?.(e.message, 'err')); }}><span>Show {link.label} on TV</span><small>full dashboard</small></button>}
+        {d?.partial?.length > 0 && <p className="lab-sub">Some of it did not load: {d.partial.join(', ')}.</p>}
         <p className="lab-sub">Read-only. Restart and shutdown stay in Proxmox.</p>
       </div>
     </Sheet>
@@ -184,6 +185,7 @@ export function LabPage({ reach, active, onSaid }) {
       <h3 className="lab-h">On the TV</h3>
       <div className="lab-tiles">
         <button className="lab-tile glass accent" aria-busy={busy === 'shot'} onClick={() => run('shot', api.labAction('screenshot'))}><Ic.Camera size={22} /><span>Screenshot</span></button>
+        <button className="lab-tile glass" aria-busy={busy === 'wall'} onClick={() => run('wall', api.labWall())}><Ic.Screen size={22} /><span>Show DisplayOS</span></button>
         {(st?.links || []).filter((l) => !l.id.startsWith('proxmenux')).map((l) => <button key={l.id} className="lab-tile glass" aria-busy={busy === l.id} onClick={() => run(l.id, api.labOpen(l.id))}><Ic.Chart size={22} /><span>Show {l.label}</span></button>)}
       </div>
       <h3 className="lab-h">Homelab</h3>
