@@ -939,22 +939,25 @@ async def h_wall_show(request):
 # ---------- audio output (the remote's volume wheel says where the sound goes) ----------
 AUDIO_NAMES = {"speaker": "TV speakers", "hdmi": "Soundbar (ARC)", "hdmi_arc": "Soundbar (ARC)", "hdmi_earc": "Soundbar (eARC)",
                "bt_a2dp": "Bluetooth", "usb_headset": "USB audio", "line": "Line out", "spdif": "Optical"}
-_audio = {"at": 0, "out": None}
+_audio = {}   # tv id -> {"at", "out"}: each TV has its own speakers
 
 
 async def h_audio_out(request):
-    if time.time() - _audio["at"] > 30:
-        tok = S._current.set(_tv_id(request))
+    tid = _tv_id(request)
+    ent = _audio.get(tid)
+    if not ent or time.time() - ent["at"] > 30:
+        tok = S._current.set(tid)
         try:
             raw = await S.tv.adb("shell", "dumpsys audio | grep -A14 -- '- STREAM_MUSIC:' | grep -m1 'Devices:'")
             dev = str(raw).split("Devices:", 1)[-1].strip().split()[0] if "Devices:" in str(raw) else None
-            _audio.update(at=time.time(), out=AUDIO_NAMES.get(dev, dev))
+            ent = {"at": time.time(), "out": AUDIO_NAMES.get(dev, dev)}
         except Exception as e:
-            log.info("audio output read failed: %s", e)
-            _audio.update(at=time.time(), out=None)
+            log.info("audio output read failed on %s: %s", tid, e)
+            ent = {"at": time.time(), "out": None}
         finally:
             S._current.reset(tok)
-    return S.ok(output=_audio["out"])
+        _audio[tid] = ent
+    return S.ok(output=ent["out"])
 
 
 async def h_open(request):
