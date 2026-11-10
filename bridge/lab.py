@@ -247,6 +247,7 @@ async def save_screenshot(tv_id=None):
         try:
             if t == "server":
                 _write(SHOT_DIR, name, png)
+                _forget_shots()
                 saved.append("server")
                 try:
                     await asyncio.to_thread(_thumb, name)
@@ -298,13 +299,26 @@ def _thumb(name):
     return dst
 
 
+_shots_memo = {"at": 0, "names": None}
+
+
+def _forget_shots():
+    _shots_memo.update(at=0, names=None)
+
+
 def _all_shots():
+    """Every screenshot name, newest first; remembered for 10 s and forgotten on save or delete."""
+    if _shots_memo["names"] is not None and time.time() - _shots_memo["at"] < 10:
+        return _shots_memo["names"]
     out = []
     if os.path.isdir(SHOT_DIR):
         for day in sorted(os.listdir(SHOT_DIR), reverse=True):
             d = os.path.join(SHOT_DIR, day)
             if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) and os.path.isdir(d):
                 out += sorted((n for n in os.listdir(d) if NAME_RE.fullmatch(n)), key=lambda n: n[-21:], reverse=True)
+            if len(out) >= 5000:   # a cap, however many years of screenshots pile up
+                break
+    _shots_memo.update(at=time.time(), names=out)
     return out
 
 
@@ -344,7 +358,7 @@ async def h_shot_thumb(request):
     except Exception as e:
         log.info("thumbnail for %s failed: %s", name, e)
         return web.FileResponse(_shot_path(name), headers={"Cache-Control": "no-store"})
-    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=3600"})
+    return web.FileResponse(path, headers={"Cache-Control": "no-store"})   # private, and deletable
 
 
 async def h_shot_delete(request):
@@ -360,6 +374,7 @@ async def h_shot_delete(request):
             os.remove(f)
         except FileNotFoundError:
             pass
+    _forget_shots()
     S.record_action(request, "screenshot_delete", {"name": name}, True)
     return S.ok(deleted=name)
 
