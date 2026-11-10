@@ -66,6 +66,7 @@ export const api = {
   labPages: () => call('GET', '/api/lab/pages'),
   labWidgets: () => call('GET', '/api/lab/widgets'),
   labStatus: () => call('GET', '/api/lab/status', null, 15000),
+  labAudioOut: () => call('GET', '/api/lab/audio-out', null, 15000),
   labWall: () => call('POST', '/api/lab/wall/show', {}, 30000),
   labOpen: (id) => call('POST', `/api/lab/open/${encodeURIComponent(id)}`, {}, 20000),
   labHub: () => call('GET', '/api/lab/hub', null, 15000),

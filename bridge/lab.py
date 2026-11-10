@@ -748,21 +748,16 @@ _fp_cache = {}
 TV_INTERLUDES = ("clock", "weather", "verse")
 
 
-def _cert_fp(host, port):
-    import ssl
-    key = f"{host}:{port}"
-    hit = _fp_cache.get(key)
-    if hit and hit[0] > time.time():
-        return hit[1]
-    try:
-        import hashlib
-        pem = ssl.get_server_certificate((host, port), timeout=4)
-        fp = hashlib.sha256(ssl.PEM_cert_to_DER_cert(pem)).hexdigest().upper()
-    except Exception as e:
-        log.info("wall: no certificate from %s: %s", key, e)
-        fp = None
-    _fp_cache[key] = (time.time() + 3600, fp)
-    return fp
+def _declared_pins():
+    """Certificate pins for self-signed dashboards, declared by the operator (never learned at runtime):
+    lab.wall.pins {"host:port": "AA:BB:..."} plus every lab.proxmox host's fingerprint on port 8006."""
+    pins = {}
+    for hp, fp in (WALL.get("pins") or {}).items():
+        if re.fullmatch(r"[A-Za-z0-9.-]{1,100}:\d{1,5}", str(hp)) and FP_RE.fullmatch(str(fp)):
+            pins[hp] = fp.replace(":", "").upper()
+    for p in PVE.values():
+        pins.setdefault(f"{p['host']}:8006", p["fingerprint"].replace(":", "").upper())
+    return pins
 
 
 def _wall_plan():
@@ -777,7 +772,7 @@ def _wall_plan():
     with open(path) as f:
         cfg = yaml.safe_load(f) or {}
     default = int(cfg.get("defaultDuration") or 300)
-    dash, pins = {}, {}
+    dash, pins, declared = {}, {}, _declared_pins()
     for d in cfg.get("dashboards") or []:
         if not isinstance(d, dict) or d.get("enabled") is False or not ID_RE.fullmatch(str(d.get("id") or "")):
             continue
@@ -788,11 +783,15 @@ def _wall_plan():
         item = {"id": d["id"], "name": str(d.get("name") or d["id"])[:60], "url": url,
                 "duration": int(d.get("duration") or default), "refresh": int(d.get("refresh") or 0),
                 "zoom": float(d.get("zoom") or 1), "css": str(d.get("css") or "")[:4000]}
+        if u.username or u.password:   # never hand credentials embedded in a URL to the TV
+            continue
         if d.get("insecureTLS") and u.scheme == "https":
-            port = u.port or 443
-            fp = _cert_fp(u.hostname, port)
-            if fp:
-                pins[f"{u.hostname}:{port}"] = fp
+            hp = f"{u.hostname}:{u.port or 443}"
+            if hp in declared:
+                pins[hp] = declared[hp]
+            else:
+                log.info("wall: %s needs a pin in lab.wall.pins for its self-signed certificate; skipped", d["id"])
+                continue
         dash[d["id"]] = item
     slides = []
     for s in (cfg.get("slides") or [[k] for k in dash]):
@@ -825,8 +824,9 @@ def _wall_plan():
 async def h_wall(request):
     try:
         plan = await asyncio.to_thread(_wall_plan)
-    except (OSError, RuntimeError) as e:
-        raise S.ApiError(404, f"no DisplayOS config on the bridge ({e})")
+    except Exception as e:
+        log.info("wall plan failed: %s", e)
+        raise S.ApiError(404, "DisplayOS config could not be read")
     return S.ok(**plan)
 
 
@@ -867,6 +867,27 @@ async def h_wall_show(request):
     return S.ok(**r)
 
 
+# ---------- audio output (the remote's volume wheel says where the sound goes) ----------
+AUDIO_NAMES = {"speaker": "TV speakers", "hdmi": "Soundbar (ARC)", "hdmi_arc": "Soundbar (ARC)", "hdmi_earc": "Soundbar (eARC)",
+               "bt_a2dp": "Bluetooth", "usb_headset": "USB audio", "line": "Line out", "spdif": "Optical"}
+_audio = {"at": 0, "out": None}
+
+
+async def h_audio_out(request):
+    if time.time() - _audio["at"] > 30:
+        tok = S._current.set(_tv_id(request))
+        try:
+            raw = await S.tv.adb("shell", "dumpsys audio | grep -A14 -- '- STREAM_MUSIC:' | grep -m1 'Devices:'")
+            dev = str(raw).split("Devices:", 1)[-1].strip().split()[0] if "Devices:" in str(raw) else None
+            _audio.update(at=time.time(), out=AUDIO_NAMES.get(dev, dev))
+        except Exception as e:
+            log.info("audio output read failed: %s", e)
+            _audio.update(at=time.time(), out=None)
+        finally:
+            S._current.reset(tok)
+    return S.ok(output=_audio["out"])
+
+
 async def h_open(request):
     data = await S.body(request)
     try:
@@ -882,6 +903,7 @@ def routes(r):
     r.add_post("/api/lab/open/{id}", h_open)
     r.add_get("/api/lab/host/{id}", h_host)
     r.add_get("/api/lab/wall", h_wall)
+    r.add_get("/api/lab/audio-out", h_audio_out)
     r.add_get("/api/lab/wall/interlude", h_wall_interlude)
     r.add_post("/api/lab/wall/show", h_wall_show)
     r.add_get("/api/lab/hub", h_hub)

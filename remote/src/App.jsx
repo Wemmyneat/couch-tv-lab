@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { api, subscribeNow, setTvId } from './api.js';
 import { tick } from './haptics.js';
 import * as Ic from './icons.jsx';
-import { TopBar, NowPlaying, Pad, Controls, AskButton } from './Remote.jsx';
+import { TopBar, NowPlaying, Pad, Controls, AskButton, VolumeWheel } from './Remote.jsx';
 import { Watch } from './Watch.jsx';
 import { AskSheet, MoreSheet, ArrangeSheet, PeopleSheet, Onboarding } from './Sheets.jsx';
 import { usePullDown, usePageDrag, TABS } from './gestures.js';
@@ -160,6 +160,8 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   const [toast, setToast] = useState(null);
+  const [padTouch, setPadTouch] = useState(false);
+  const [audioOut, setAudioOut] = useState(null);
   const [sleepError, setSleepError] = useState(null);
   const [, setNowTick] = useState(0);
   const askInput = useRef(null);
@@ -173,6 +175,7 @@ export default function App() {
   useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(null), toast.text.length > 40 ? 4500 : 2600); return () => clearTimeout(t); }, [toast]);
 
   useEffect(() => { setTv(null); return subscribeNow(setTv, setReach); }, [tvId]);
+  useEffect(() => { const f = () => api.labAudioOut().then((d) => setAudioOut(d.output)).catch(() => {}); f(); const t = setInterval(f, 60000); return () => clearInterval(t); }, [tvId, reach]);
   useEffect(() => { api.tvs().then((d) => setTvs(d.tvs || [])).catch(() => {}); }, [reach, tvId]);
   // "Same as the TV": the language picked in the TV home's Home settings
   // and its look and hidden apps
@@ -237,7 +240,7 @@ export default function App() {
   const [wakeError, setWakeError] = useState(null);
   useEffect(() => { if (tv?.power === 'on') setWakeError(null); }, [tv?.power]);
   const onKey = (key, hold) => run(api.key(key, hold));
-  const onVolume = (a) => run(api.volume(a));
+  const onVolume = (a, steps) => run(api.volume(a, steps));
   // A fully off TV leaves the Wi-Fi; the bridge tries Wake-on-LAN for up to 25 s, then gives up.
   const onWake = async () => {
     setWakeError(null);
@@ -335,14 +338,21 @@ export default function App() {
   const remote = (
     <div className="remote-col">
       <div className="pull-zone" {...pull}>
-      <TopBar people={people} tvName={thisTv?.name} who={who} setWho={pickWho} tv={tv} appInfo={appById[tv?.app?.id]} reach={reach} sleepLeft={sleepLeft} onPower={onPower} onMore={() => setSheet('more')} />
+      <TopBar people={people} tvName={thisTv?.name} who={who} setWho={pickWho} tv={tv} appInfo={appById[tv?.app?.id]} reach={reach} sleepLeft={sleepLeft} onPower={onPower} />
       {tvId && <button className="tv-chip glass" onClick={() => { tick(); setSheet('more'); }}><Ic.Screen size={15} /> {t('this_tv', { name: thisTv?.name || t('this') })}</button>}
       <NowPlaying tv={tv} appInfo={appById[tv?.app?.id]} onKey={onKey} roomy={h >= 760} />
       </div>
-      <Pad onKey={onKey} offState={offState} wakeError={wakeError} onWake={onWake} onRetry={onRetry}
-        tvName={thisTv?.name} onLivingRoom={() => { tick(); chooseTv(null); }} />
+      <div className={`padrow ${padTouch ? 'touching' : ''}`}>
+        <Pad onKey={onKey} offState={offState} wakeError={wakeError} onWake={onWake} onRetry={onRetry} onTouch={setPadTouch}
+          tvName={thisTv?.name} onLivingRoom={() => { tick(); chooseTv(null); }} />
+        {!offState && <VolumeWheel tv={tv} onVolume={onVolume} compact={padTouch} output={audioOut} />}
+      </div>
       <Controls tv={tv} onKey={onKey} onVolume={onVolume} />
-      <LabButtons reach={reach} onResult={(r) => { const m = labResult(r); say(m.text, m.kind); }} onError={(e) => say(e.message, 'err')} />
+      <div className="shortcuts-row">
+        <LabButtons reach={reach} onResult={(r) => { const m = labResult(r); say(m.text, m.kind); }} onError={(e) => say(e.message, 'err')} />
+        <button className="round glass more-up" aria-label={t('more_controls')} onClick={() => { tick(); setSheet('more'); }}><Ic.Chevron size={20} /></button>
+      </div>
+      {wide && <button className="round glass tvhome wide-home" aria-label="TV home" onClick={() => { tick(); onKey('home'); }}><Ic.Home size={20} /></button>}
       {wide && askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
     </div>
   );
@@ -366,7 +376,7 @@ export default function App() {
           </div>
           <div className="dock" {...dockDrag}>
             {askOn && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}
-            {tabs}
+            <div className="tabrow">{tabs}<button className="round glass tvhome" aria-label="TV home" onClick={() => { tick(); onKey('home'); }}><Ic.Home size={20} /></button></div>
           </div>
         </main>
       )}

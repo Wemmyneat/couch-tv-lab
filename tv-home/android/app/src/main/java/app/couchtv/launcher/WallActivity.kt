@@ -119,10 +119,15 @@ class WallActivity : Activity() {
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
                 val uri = Uri.parse(error.url)
                 val key = "${uri.host}:${if (uri.port > 0) uri.port else 443}"
+                // only an untrusted (self-signed) issuer is ever overridden; expired, wrong host etc. never are
+                val untrustedOnly = error.primaryError == SslError.SSL_UNTRUSTED
+                // and only for a host that one of the plan's own dashboards points at
+                val inPlan = plan?.optJSONObject("dashboards")?.let { ds -> ds.keys().asSequence().any { id ->
+                    Uri.parse(ds.optJSONObject(id)?.optString("url").orEmpty()).let { u -> "${u.host}:${if (u.port > 0) u.port else 443}" == key } } } == true
                 val want = plan?.optJSONObject("pins")?.optString(key, null)
                 val got = if (Build.VERSION.SDK_INT >= 29) error.certificate.x509Certificate?.let { fingerprint(it.encoded) } else null
-                if (want != null && got != null && want.equals(got, ignoreCase = true)) handler.proceed()
-                else { Log.w(TAG, "certificate refused for $key"); handler.cancel() }
+                if (untrustedOnly && inPlan && want != null && got != null && want.equals(got, ignoreCase = true)) handler.proceed()
+                else { Log.w(TAG, "certificate refused for $key (error ${error.primaryError})"); handler.cancel() }
             }
         }
     }
