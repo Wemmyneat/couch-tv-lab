@@ -248,6 +248,10 @@ async def save_screenshot(tv_id=None):
             if t == "server":
                 _write(SHOT_DIR, name, png)
                 saved.append("server")
+                try:
+                    await asyncio.to_thread(_thumb, name)
+                except Exception as e:
+                    log.info("thumbnail for %s failed: %s", name, e)
             elif t == "nas":
                 if not NAS_DIR or not os.path.isdir(NAS_DIR):
                     raise RuntimeError("the NAS folder is not mounted")
@@ -273,26 +277,91 @@ async def h_shot_save(request):
     return S.ok(**{k: v for k, v in r.items() if k != "ok"})
 
 
-async def h_shot_list(request):
+THUMB_W = 480
+
+
+def _shot_path(name):
+    return os.path.join(SHOT_DIR, name[-21:-11], name)
+
+
+def _thumb(name):
+    """A small JPEG beside the PNG (about 20 KB), made once, the first time it is asked for."""
+    src = _shot_path(name)
+    dst = src[:-4] + ".thumb.jpg"
+    if not os.path.isfile(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
+        from PIL import Image
+        with Image.open(src) as im:
+            im = im.convert("RGB")
+            im.thumbnail((THUMB_W, THUMB_W))
+            im.save(dst + ".tmp", "JPEG", quality=72, optimize=True)
+        os.replace(dst + ".tmp", dst)
+    return dst
+
+
+def _all_shots():
     out = []
     if os.path.isdir(SHOT_DIR):
-        for day in sorted(os.listdir(SHOT_DIR), reverse=True)[:14]:
+        for day in sorted(os.listdir(SHOT_DIR), reverse=True):
             d = os.path.join(SHOT_DIR, day)
-            if os.path.isdir(d):
-                out += [n for n in sorted(os.listdir(d), reverse=True) if NAME_RE.fullmatch(n)]
-            if len(out) >= 60:
-                break
-    return S.ok(shots=[{"name": n, "url": f"/api/screenshots/{n}"} for n in out[:60]], targets=TARGETS)
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) and os.path.isdir(d):
+                out += sorted((n for n in os.listdir(d) if NAME_RE.fullmatch(n)), key=lambda n: n[-21:], reverse=True)
+    return out
+
+
+async def h_shot_list(request):
+    """Newest first, a page at a time: ?limit=20&before=<name of the last one shown>."""
+    try:
+        limit = max(1, min(int(request.query.get("limit") or 20), 60))
+    except ValueError:
+        limit = 20
+    before = request.query.get("before")
+    names = await asyncio.to_thread(_all_shots)
+    if before and NAME_RE.fullmatch(before) and before in names:
+        names = names[names.index(before) + 1:]
+    page = names[:limit]
+    shots = [{"name": n, "url": f"/api/screenshots/{n}", "thumb": f"/api/screenshots/{n}/thumb",
+              "day": n[-21:-11], "time": f"{n[-10:-8]}:{n[-8:-6]}", "app": next((n[len(t) + 1:-22] for t in S.TVS if n.startswith(t + "-")), "")}
+             for n in page]
+    return S.ok(shots=shots, next=page[-1] if len(names) > limit else None, targets=TARGETS)
 
 
 async def h_shot_file(request):
     name = request.match_info["name"]
     if not NAME_RE.fullmatch(name):
         raise S.ApiError(400, "bad name")
-    path = os.path.join(SHOT_DIR, name[-21:-11], name)
+    path = _shot_path(name)
     if not os.path.isfile(path):
         raise S.ApiError(404, "no such screenshot")
     return web.FileResponse(path, headers={"Cache-Control": "no-store"})   # private captures: never cached
+
+
+async def h_shot_thumb(request):
+    name = request.match_info["name"]
+    if not NAME_RE.fullmatch(name) or not os.path.isfile(_shot_path(name)):
+        raise S.ApiError(404, "no such screenshot")
+    try:
+        path = await asyncio.to_thread(_thumb, name)
+    except Exception as e:
+        log.info("thumbnail for %s failed: %s", name, e)
+        return web.FileResponse(_shot_path(name), headers={"Cache-Control": "no-store"})
+    return web.FileResponse(path, headers={"Cache-Control": "private, max-age=3600"})
+
+
+async def h_shot_delete(request):
+    """Deletes the server copy (and its thumbnail). Copies in Immich or on the NAS stay."""
+    name = request.match_info["name"]
+    if not NAME_RE.fullmatch(name):
+        raise S.ApiError(400, "bad name")
+    path = _shot_path(name)
+    if not os.path.isfile(path):
+        raise S.ApiError(404, "no such screenshot")
+    for f in (path, path[:-4] + ".thumb.jpg"):
+        try:
+            os.remove(f)
+        except FileNotFoundError:
+            pass
+    S.record_action(request, "screenshot_delete", {"name": name}, True)
+    return S.ok(deleted=name)
 
 
 # ---------- widgets: homelab data on the TV and the phone ----------
@@ -919,3 +988,5 @@ def routes(r):
     r.add_post("/api/screenshot/save", h_shot_save)
     r.add_get("/api/screenshots", h_shot_list)
     r.add_get("/api/screenshots/{name}", h_shot_file)
+    r.add_get("/api/screenshots/{name}/thumb", h_shot_thumb)
+    r.add_post("/api/screenshots/{name}/delete", h_shot_delete)

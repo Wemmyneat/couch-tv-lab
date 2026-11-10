@@ -62,7 +62,8 @@ export const api = {
   // couch-tv-lab (bridge/lab.py)
   labButtons: () => call('GET', '/api/lab/buttons'),
   labAction: (id) => call('POST', `/api/lab/action/${encodeURIComponent(id)}`, {}, 60000),
-  screenshots: () => call('GET', '/api/screenshots'),
+  screenshots: (before) => call('GET', `/api/screenshots?limit=20${before ? `&before=${encodeURIComponent(before)}` : ''}`),
+  deleteShot: (name) => call('POST', `/api/screenshots/${encodeURIComponent(name)}/delete`, {}),
   labPages: () => call('GET', '/api/lab/pages'),
   labWidgets: () => call('GET', '/api/lab/widgets'),
   labStatus: () => call('GET', '/api/lab/status', null, 15000),

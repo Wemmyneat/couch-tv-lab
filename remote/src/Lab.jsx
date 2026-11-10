@@ -1,6 +1,6 @@
 // couch-tv-lab: the custom buttons strip (lab.buttons in config.json, bridge/lab.py).
 // One tap runs the button's steps on the bridge: keys, apps, inputs, volume, sleep, power, screenshot.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, getTvId } from './api.js';
 import * as Ic from './icons.jsx';
 import { tick } from './haptics.js';
@@ -69,13 +69,73 @@ function Widget({ w }) {
 // The Lab tab, actions first (lab/PLAN-polish.md): a line of status chips, things to do on the TV, homelab
 // tiles that open a sheet, then the TV widgets editor and the screenshots. Stats live on the TV and in
 // Grafana; the phone is for doing things.
-function Shots() {
-  const [shots, setShots] = useState(null);
-  useEffect(() => { api.screenshots().then((d) => setShots(d.shots || [])).catch(() => setShots([])); }, []);
+// Screenshots: small thumbnails (bridge-made JPEGs), newest first, 20 at a time; the next page loads
+// as the end comes into view. Tap one for the full size, Share (where the browser allows it) and Delete.
+function Shots({ onSaid }) {
+  const [shots, setShots] = useState([]);
+  const [next, setNext] = useState(undefined);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(null);
+  const [sure, setSure] = useState(false);
+  const end = useRef(null);
+  const load = (before) => {
+    if (busy) return;
+    setBusy(true);
+    api.screenshots(before).then((d) => { setShots((s) => (before ? [...s, ...(d.shots || [])] : d.shots || [])); setNext(d.next || null); })
+      .catch((e) => onSaid?.(e.message, 'err')).finally(() => setBusy(false));
+  };
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const el = end.current;
+    if (!el || !next || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) load(next); }, { rootMargin: '300px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [next, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  const share = async (s) => {
+    tick();
+    try {
+      const blob = await (await fetch(s.url)).blob();
+      const file = new File([blob], s.name, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file] });
+    } catch (e) { if (e.name !== 'AbortError') onSaid?.('Sharing did not work here. Use Open full size.', 'warn'); }
+  };
+  const del = (s) => {
+    if (!sure) { setSure(true); tick(); return; }
+    api.deleteShot(s.name).then(() => { setShots((x) => x.filter((y) => y.name !== s.name)); setOpen(null); setSure(false); onSaid?.('Deleted from the server (Immich keeps its copy)'); })
+      .catch((e) => onSaid?.(e.message, 'err'));
+  };
+  const days = [];
+  shots.forEach((s) => { const d = days[days.length - 1]; if (d && d.day === s.day) d.items.push(s); else days.push({ day: s.day, items: [s] }); });
+  const canShare = typeof navigator !== 'undefined' && Boolean(navigator.share) && window.isSecureContext;
   return (
-    <div className="lab-shots">{(shots || []).map((s) => (
-      <a key={s.name} href={s.url} target="_blank" rel="noreferrer"><img src={s.url} alt={s.name} loading="lazy" /><small>{s.name.replace(/^[^-]+-[^-]+-/, '').replace(/\.png$/, '')}</small></a>
-    ))}{shots && !shots.length && <p className="lab-sub">No screenshots yet.</p>}</div>
+    <div className="shots">
+      {days.map((d) => (
+        <section key={d.day}>
+          <h3 className="lab-h">{d.day}</h3>
+          <div className="lab-shots">{d.items.map((s) => (
+            <button key={s.name} className="shot" onClick={() => { tick(); setSure(false); setOpen(s); }}>
+              <img src={s.thumb} alt={`${s.app || 'TV'} at ${s.time}`} loading="lazy" width="480" height="270" />
+              <small>{s.time}{s.app ? ` · ${s.app}` : ''}</small>
+            </button>
+          ))}</div>
+        </section>
+      ))}
+      {!busy && !shots.length && <p className="lab-sub">No screenshots yet. Tap Screenshot on the Remote tab.</p>}
+      <div ref={end} />
+      {next && <button className="lab-tile glass small more-shots" disabled={busy} onClick={() => load(next)}><span>{busy ? 'Loading…' : 'Load 20 more'}</span></button>}
+      {open && (
+        <div className="shot-view" role="dialog" aria-label="Screenshot">
+          <img src={open.url} alt="" />
+          <div className="shot-actions">
+            {canShare ? <button className="chip glass" onClick={() => share(open)}>Share</button>
+              : <a className="chip glass" href={open.url} target="_blank" rel="noreferrer">Open full size</a>}
+            <button className={`chip glass ${sure ? 'danger' : ''}`} onClick={() => del(open)}>{sure ? 'Tap again to delete' : 'Delete'}</button>
+            <button className="chip glass" onClick={() => { tick(); setOpen(null); setSure(false); }}>Close</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -171,7 +231,7 @@ export function LabPage({ reach, active, onSaid }) {
       <div className="lab">
         <div className="lab-top"><button className="round glass small" aria-label="Back to Lab" onClick={() => { tick(); setView('home'); }}><Ic.Back size={18} /></button>
           <h1 className="lab-title">{view === 'widgets' ? 'TV widgets' : 'Screenshots'}</h1></div>
-        {view === 'widgets' ? <WidgetEditor onSaid={onSaid} /> : <Shots />}
+        {view === 'widgets' ? <WidgetEditor onSaid={onSaid} /> : <Shots onSaid={onSaid} />}
       </div>
     );
   }
