@@ -68,6 +68,7 @@ export const api = {
   labStatus: () => call('GET', '/api/lab/status', null, 15000),
   labOpen: (id) => call('POST', `/api/lab/open/${encodeURIComponent(id)}`, {}, 20000),
   labHub: () => call('GET', '/api/lab/hub', null, 15000),
+  labHost: (id) => call('GET', `/api/lab/host/${encodeURIComponent(id)}`, null, 15000),
   labHubAction: (type, id, done) => call('POST', '/api/lab/hub/action', { type, id, done }),
   labLayout: () => call('GET', '/api/lab/layout', null, 20000),
   saveLabLayout: (items) => call('POST', '/api/lab/layout', { items }),

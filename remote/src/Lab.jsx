@@ -102,12 +102,47 @@ function HubSheet({ open, onClose, onSaid }) {
   );
 }
 
-function HostSheet({ chip, onClose }) {
+function Bar({ label, used, total, unit = 'GB' }) {
+  const pct = total ? Math.min(100, Math.round((used / total) * 100)) : 0;
   return (
-    <Sheet open={Boolean(chip)} onClose={onClose} title={chip?.label || ''}>
+    <div className="pbar"><div className="pbar-row"><span>{label}</span><span>{used} / {total} {unit}</span></div>
+      <div className="pbar-track"><div className={`pbar-fill ${pct >= 85 ? 'hot' : ''}`} style={{ width: `${pct}%` }} /></div></div>
+  );
+}
+
+// A Proxmox host: read-only stats from its API (bridge/lab.py, PVEAuditor token). Restart and shutdown
+// stay in Proxmox, never on a TV remote. "Show on TV" opens the host's ProxMenux dashboard when one is set up.
+function HostSheet({ chip, links, onClose, onSaid }) {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    setD(null);
+    if (!chip) return undefined;
+    if (!chip.pve) { setD({ online: chip.state === 'ok', plain: true }); return undefined; }
+    let live = true;
+    const load = () => api.labHost(chip.id).then((r) => live && setD(r)).catch((e) => live && setD({ online: false, error: e.message }));
+    load();
+    const t = setInterval(load, 15000);
+    return () => { live = false; clearInterval(t); };
+  }, [chip]);
+  const link = (links || []).find((l) => l.id === `proxmenux${(chip?.id || '').replace(/\D/g, '')}`);
+  return (
+    <Sheet open={Boolean(chip)} onClose={onClose} title={chip?.id ? (d?.node || chip.label.split(' · ')[0]) : ''}>
       <div className="hub-sheet">
-        <p className="lab-sub"><i className={`dot ${chip?.state === 'ok' ? 'up' : 'down'}`} /> {chip?.state === 'ok' ? 'Reachable from the bridge' : 'Not answering'}</p>
-        <p className="lab-sub">CPU, memory, disk and guests appear here once node_exporter and a read-only Proxmox token are set up (lab/PLAN-polish.md, step 3). Read-only: restart and shutdown stay in Proxmox.</p>
+        {!d && <p className="lab-sub">Loading…</p>}
+        {d && <p className="lab-sub"><i className={`dot ${d.online ? 'up' : 'down'}`} /> {d.online ? (d.plain ? 'Reachable from the bridge' : `Online · up ${d.uptime_h} h · ${d.cores} cores · load ${d.load ?? '–'}`) : (d.error || 'Not answering')}</p>}
+        {d?.online && !d.plain && (<>
+          <Bar label="CPU" used={d.cpu} total={100} unit="%" />
+          <Bar label="Memory" used={d.mem_gb} total={d.memtotal_gb} />
+          <Bar label="Root disk" used={d.root_gb} total={d.roottotal_gb} />
+          <h3 className="lab-h">Guests</h3>
+          {d.guests?.length ? <ul className="wcat">{d.guests.map((g) => (
+            <li key={`${g.kind}${g.id}`}><i className={`dot ${g.status === 'running' ? 'up' : 'down'}`} /><div><b>{g.kind.toUpperCase()} {g.id} {g.name}</b><small>{g.status} · {g.cpu}% CPU · {g.mem_gb}/{g.maxmem_gb} GB</small></div></li>
+          ))}</ul> : <p className="lab-sub">No guests.</p>}
+          <h3 className="lab-h">Storage</h3>
+          {(d.storage || []).map((x) => <Bar key={x.name} label={x.name} used={x.used_gb} total={x.total_gb} />)}
+        </>)}
+        {link && <button className="lab-tile glass small" onClick={() => { tick(); api.labOpen(link.id).then((r) => onSaid?.(r.note || 'Opened on the TV'), (e) => onSaid?.(e.message, 'err')); }}><span>Show {link.label} on TV</span><small>full dashboard</small></button>}
+        <p className="lab-sub">Read-only. Restart and shutdown stay in Proxmox.</p>
       </div>
     </Sheet>
   );
@@ -149,11 +184,11 @@ export function LabPage({ reach, active, onSaid }) {
       <h3 className="lab-h">On the TV</h3>
       <div className="lab-tiles">
         <button className="lab-tile glass accent" aria-busy={busy === 'shot'} onClick={() => run('shot', api.labAction('screenshot'))}><Ic.Camera size={22} /><span>Screenshot</span></button>
-        {(st?.links || []).map((l) => <button key={l.id} className="lab-tile glass" aria-busy={busy === l.id} onClick={() => run(l.id, api.labOpen(l.id))}><Ic.Chart size={22} /><span>Show {l.label}</span></button>)}
+        {(st?.links || []).filter((l) => !l.id.startsWith('proxmenux')).map((l) => <button key={l.id} className="lab-tile glass" aria-busy={busy === l.id} onClick={() => run(l.id, api.labOpen(l.id))}><Ic.Chart size={22} /><span>Show {l.label}</span></button>)}
       </div>
       <h3 className="lab-h">Homelab</h3>
       <div className="lab-tiles">
-        {hosts.map((h) => <button key={h.id} className="lab-tile glass small" onClick={() => { tick(); setHost(h); }}><span>{h.label}</span><small><i className={`dot ${STATE_DOT[h.state]}`} />{h.state === 'ok' ? 'up' : 'down'}</small></button>)}
+        {hosts.map((h) => <button key={h.id} className="lab-tile glass small" onClick={() => { tick(); setHost(h); }}><span>{h.label.split(' · ')[0]}</span><small><i className={`dot ${STATE_DOT[h.state]}`} />{h.state !== 'ok' ? 'down' : h.pve ? h.label.split(' · ').slice(1).join(' · ') : 'up'}</small></button>)}
         {st?.hub && <button className="lab-tile glass small" onClick={() => { tick(); setHub(true); }}><span>Hub actions</span><small>tasks · habits</small></button>}
       </div>
       <div className="lab-tiles">
@@ -161,7 +196,7 @@ export function LabPage({ reach, active, onSaid }) {
         <button className="lab-tile glass small" onClick={() => { tick(); setView('shots'); }}><span>Screenshots</span><small>server · Immich</small></button>
       </div>
       <HubSheet open={hub} onClose={() => setHub(false)} onSaid={onSaid} />
-      <HostSheet chip={host} onClose={() => setHost(null)} />
+      <HostSheet chip={host} links={st?.links} onClose={() => setHost(null)} onSaid={onSaid} />
     </div>
   );
 }

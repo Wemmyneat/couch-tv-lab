@@ -603,3 +603,9 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .lab-tile[aria-busy="true"] { opacity: 0.55; }
 .hub-sheet { display: flex; flex-direction: column; gap: 10px; padding: 0 var(--side, 16px) 24px; }
 .wadd.on { background: rgba(61,220,132,0.2); color: #3ddc84; }
+.pbar { display: flex; flex-direction: column; gap: 6px; }
+.pbar-row { display: flex; justify-content: space-between; font-size: 14px; }
+.pbar-row span:last-child { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pbar-track { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); }
+.pbar-fill { height: 8px; border-radius: 4px; background: #7cc4ff; }
+.pbar-fill.hot { background: #ffb547; }

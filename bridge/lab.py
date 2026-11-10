@@ -597,6 +597,13 @@ async def h_status(request):
         except Exception as e:
             log.info("hub status failed: %s", e)
             chips.append({"id": "hub", "label": "Hub", "state": "down"})
+    for pid in PVE:
+        try:
+            sm = await pve_summary(pid)
+            chips.append({"id": pid, "label": f"{sm['label']} · {sm['cpu']}% · {sm['mem_gb']}/{sm['memtotal_gb']} GB", "state": "ok", "pve": True})
+        except Exception as e:
+            log.info("proxmox %s chip failed: %s", pid, e)
+            chips.append({"id": pid, "label": PVE[pid]["label"], "state": "down", "pve": True})
     ups = await asyncio.gather(*(_reachable(h["host"], h["port"]) for h in HOSTS))
     chips += [{"id": h["id"], "label": str(h.get("label") or h["id"])[:20], "state": "ok" if up else "down"} for h, up in zip(HOSTS, ups)]
     if LAB.get("power_pending"):
@@ -639,6 +646,74 @@ async def h_hub_action(request):
     return S.ok(**payload)
 
 
+# ---------- Proxmox hosts (read-only API token, pinned certificate) ----------
+# lab.proxmox: [{"id","label","host","node","token_env","fingerprint"}]. The token is a PVEAuditor API token
+# kept in .env ("user@realm!name=secret"); it can only read. Proxmox serves a self-signed certificate, so
+# instead of trusting any certificate the bridge pins each host's SHA-256 fingerprint.
+FP_RE = re.compile(r"([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}")
+PVE = {}
+for _p in (LAB.get("proxmox") or [])[:8]:
+    if (isinstance(_p, dict) and ID_RE.fullmatch(str(_p.get("id") or "")) and re.fullmatch(r"[A-Za-z0-9.-]{1,100}", str(_p.get("host") or ""))
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,60}", str(_p.get("node") or "")) and isinstance(_p.get("token_env"), str) and FP_RE.fullmatch(str(_p.get("fingerprint") or ""))):
+        PVE[_p["id"]] = dict(_p, label=str(_p.get("label") or _p["id"])[:20])
+
+
+async def _pve(p, path):
+    tok = os.environ.get(p["token_env"])
+    if not tok:
+        raise RuntimeError(f"{p['token_env']} is not set in .env")
+    fp = aiohttp.Fingerprint(bytes.fromhex(p["fingerprint"].replace(":", "")))
+    url = f"https://{p['host']}:8006/api2/json{path}"
+    hit = _cache.get(url)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as s:
+        async with s.get(url, headers={"Authorization": f"PVEAPIToken={tok}"}, ssl=fp) as r:
+            if r.status >= 300:
+                raise RuntimeError(f"Proxmox answered {r.status}")
+            data = (await r.json(content_type=None)).get("data")
+    _cache[url] = (time.time() + 15, data)
+    return data
+
+
+def _gb(n):
+    return round((n or 0) / 2**30, 1)
+
+
+async def pve_summary(pid):
+    p = PVE[pid]
+    node = f"/nodes/{p['node']}"
+    st, lxc, qemu, storage = await asyncio.gather(_pve(p, f"{node}/status"), _pve(p, f"{node}/lxc"), _pve(p, f"{node}/qemu"),
+                                                  _pve(p, f"{node}/storage"), return_exceptions=True)
+    if isinstance(st, Exception):
+        raise st
+    guests = []
+    for kind, rows in (("ct", lxc), ("vm", qemu)):
+        for g in (rows if isinstance(rows, list) else []):
+            guests.append({"id": int(g.get("vmid") or 0), "kind": kind, "name": str(g.get("name") or "")[:40], "status": str(g.get("status") or ""),
+                           "cpu": round(float(g.get("cpu") or 0) * 100), "mem_gb": _gb(g.get("mem")), "maxmem_gb": _gb(g.get("maxmem"))})
+    disks = [{"name": str(d.get("storage"))[:30], "used_gb": _gb(d.get("used")), "total_gb": _gb(d.get("total"))}
+             for d in (storage if isinstance(storage, list) else []) if d.get("active") and d.get("total")]
+    return {"id": pid, "label": p["label"], "node": p["node"], "online": True,
+            "cpu": round(float(st.get("cpu") or 0) * 100), "cores": (st.get("cpuinfo") or {}).get("cpus"),
+            "mem_gb": _gb((st.get("memory") or {}).get("used")), "memtotal_gb": _gb((st.get("memory") or {}).get("total")),
+            "root_gb": _gb((st.get("rootfs") or {}).get("used")), "roottotal_gb": _gb((st.get("rootfs") or {}).get("total")),
+            "uptime_h": int((st.get("uptime") or 0) // 3600), "load": (st.get("loadavg") or [None])[0],
+            "guests": sorted(guests, key=lambda g: g["id"]), "storage": disks}
+
+
+async def h_host(request):
+    pid = request.match_info["id"]
+    if pid not in PVE:
+        raise S.ApiError(404, f"no lab.proxmox host {pid!r}")
+    try:
+        return S.ok(**await pve_summary(pid))
+    except Exception as e:
+        log.info("proxmox %s failed: %s", pid, e)
+        return S.ok(id=pid, label=PVE[pid]["label"], online=False,
+                    error=str(e)[:120] if isinstance(e, RuntimeError) else "not answering")
+
+
 async def h_open(request):
     data = await S.body(request)
     try:
@@ -652,6 +727,7 @@ async def h_open(request):
 def routes(r):
     r.add_get("/api/lab/status", h_status)
     r.add_post("/api/lab/open/{id}", h_open)
+    r.add_get("/api/lab/host/{id}", h_host)
     r.add_get("/api/lab/hub", h_hub)
     r.add_post("/api/lab/hub/action", h_hub_action)
     r.add_get("/api/lab/widgets", h_widgets)
