@@ -283,6 +283,29 @@
   }
   function mark(name) { try { performance.mark(name); } catch (e) {} }
 
+  // couch-tv-lab: the widget grid. Layout and values come from the bridge (bridge/lab.py, GET /api/lab/layout):
+  // a fixed cols x rows grid, each widget at its own cell and size, empty cells left empty. Display only:
+  // nothing here takes focus, so the remote moves exactly as before. Edited from the phone (Lab, TV widgets).
+  function refreshLab() {
+    var el = $("lab-strip");
+    if (!el) return;
+    if (OFFLINE || !NIGHT) { el.innerHTML = ""; return; }
+    api("GET", "/api/lab/layout", null, 15000).then(function (j) {
+      el.style.gridTemplateColumns = "repeat(" + (j.cols || 2) + ", minmax(0, 1fr))";
+      el.style.gridTemplateRows = "repeat(" + (j.rows || 4) + ", 6rem)";
+      el.innerHTML = (j.items || []).map(function (it) {
+        var w = it.widget || {}, body = "";
+        if (!w.ok) body = "<b>–</b>";
+        else if (w.items) body = "<ul>" + w.items.map(function (x) {
+          return "<li><i class=\"dot " + (x.ok === false ? "down" : x.ok ? "up" : "") + "\"></i>" + esc(x.title) + "</li>";
+        }).join("") + "</ul>";
+        else body = "<b>" + esc(w.value) + "</b>" + (w.sub ? "<span>" + esc(w.sub) + "</span>" : "");
+        return '<div class="lab-card ' + esc(w.type || "") + (w.ok ? "" : " bad") + '" style="grid-column:' + (it.x + 1) + " / span " + it.w +
+          ";grid-row:" + (it.y + 1) + " / span " + it.h + '"><small>' + esc(w.title) + "</small>" + body + "</div>";
+      }).join("");
+    }, function () { el.innerHTML = ""; });
+  }
+
   function api(method, path, body, timeoutMs) {
     if (TV_ID) {
       if (method === "GET") path += (path.indexOf("?") < 0 ? "?" : "&") + "tv=" + TV_ID;
@@ -865,7 +888,14 @@
   }
   // Start the page again, so a new look or new settings take effect everywhere at once.
   function restart() {
-    location.replace(location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, ""));
+    var to = location.href.replace(/([?&])theme=[a-z]+&?/, "$1").replace(/[?&]$/, "");
+    // couch-tv-lab: the TV app's WebView blocks navigations (shouldOverrideUrlLoading returns true), so a
+    // replace() to the same address never happened and a new look only showed after an app restart.
+    // A reload is not a navigation it intercepts.
+    // the TV app reloads natively (TVOS.reload, couch-tv-lab 0.12-lab.3+); a browser preview reloads itself
+    if (to === location.href && TV && TV.reload) { TV.reload(); return; }
+    if (to === location.href) location.reload();
+    else location.replace(to);
   }
   // The TV's own input list (HDMI, a console, a set top box): the TV_INPUT key through the bridge,
   // or straight from the launcher when there is no bridge (only where the TV has such a screen).
@@ -2859,11 +2889,17 @@
     }
   }
 
+  // couch-tv-lab: home.watch_next_block, apps whose Watch Next rows are promos, not something you watched
+  function wnAllowed(r) {
+    var block = Array.isArray(HOME.watch_next_block) ? HOME.watch_next_block : [];
+    return !(r && block.indexOf(r.package || (r.app && r.app.package)) >= 0);
+  }
+
   function sendWatchNext() {
     if (!TV || !TV.watchNext) return Promise.resolve();
     var rows = [];
     try { rows = JSON.parse(TV.watchNext()) || []; } catch (e) {}
-    rows = rows.filter(function (r) { return r.package && r.title; }).map(function (r) {
+    rows = rows.filter(function (r) { return r.package && r.title && wnAllowed(r); }).map(function (r) {
       return { package: r.package, title: r.title, episode_title: r.episode_title || null,
         season: r.season || null, episode: r.episode || null, engaged: r.engaged || 0 };
     });
@@ -2882,6 +2918,7 @@
       if (TV && TV.watchNext) {
         var wn = [];
         try { wn = JSON.parse(TV.watchNext()) || []; } catch (e) {}
+        wn = wn.filter(wnAllowed);
         PEOPLE.forEach(function (p) { data.showsBy[p.id] = wn; });
       }
       detectNew();
@@ -2986,6 +3023,8 @@
     if (!OFFLINE) refreshQuick();
     refreshMusic();
     setInterval(refreshMusic, 5000);
+    refreshLab();
+    setInterval(refreshLab, 20000);   // picks up layout changes from the phone within seconds
     // This TV says who is on its couch first, so what plays here is logged for them (each TV
     // keeps its own); then the lists. Once the home is up: the one-time "tell you about new versions?" question.
     var hello = OFFLINE ? Promise.resolve() : api("POST", "/api/who", { who: who }).catch(function () {});

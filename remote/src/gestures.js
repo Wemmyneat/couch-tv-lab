@@ -57,6 +57,10 @@ function useDrag(sheetRef, { sign, decide }) {
 // first SLOP points: sideways takes the finger and moves the pages, anything else is left alone,
 // so taps still press buttons. mode 'content' moves like the page under the finger; mode 'thumb'
 // (the Remote/Watch pill) moves like the iPhone home bar, the pages travel further than the finger.
+// couch-tv-lab: three pages now (Remote, Watch, Lab), in this order.
+export const TABS = ['remote', 'watch', 'lab'];
+const at = (i) => TABS[Math.min(TABS.length - 1, Math.max(0, i))];
+
 export function usePageDrag(pagerRef, goTo, mode = 'content') {
   const g = useRef(null);
   const dragged = useRef(false);
@@ -65,7 +69,7 @@ export function usePageDrag(pagerRef, goTo, mode = 'content') {
     onPointerDown: (e) => {
       if (!e.isPrimary || (mode === 'content' && e.target.closest?.('.tabs'))) return;
       const el = pagerRef.current; if (!el) return;
-      const k = mode === 'thumb' ? el.clientWidth / Math.max(1, e.currentTarget.clientWidth / 2) : -1;
+      const k = mode === 'thumb' ? el.clientWidth / Math.max(1, e.currentTarget.clientWidth / TABS.length) : -1;
       g.current = { x: e.clientX, y: e.clientY, t: e.timeStamp, start: el.scrollLeft, live: false, k, id: e.pointerId };
     },
     onPointerMove: (e) => {
@@ -85,15 +89,17 @@ export function usePageDrag(pagerRef, goTo, mode = 'content') {
     onPointerUp: () => {
       const d = g.current; const el = pagerRef.current; g.current = null;
       if (!d?.live || !el) return;
-      const p = el.scrollLeft / Math.max(1, el.clientWidth);
+      const cw = Math.max(1, el.clientWidth);
+      const p = el.scrollLeft / cw;
+      const from = Math.round(d.start / cw);
       const v = d.v * Math.sign(d.k);
-      settleTo(el, Math.abs(v) > 0.3 ? (v > 0 ? 'watch' : 'remote') : (p > 0.5 ? 'watch' : 'remote'));
+      settleTo(el, Math.abs(v) > 0.3 ? at(from + (v > 0 ? 1 : -1)) : at(Math.round(p)));
       // The click that follows a drag must not also press the button under the finger.
       dragged.current = true; setTimeout(() => { dragged.current = false; }, 0);
     },
     onPointerCancel: () => {
       const d = g.current; const el = pagerRef.current; g.current = null;
-      if (d?.live && el) settleTo(el, el.scrollLeft / el.clientWidth > 0.5 ? 'watch' : 'remote');
+      if (d?.live && el) settleTo(el, at(Math.round(el.scrollLeft / Math.max(1, el.clientWidth))));
     },
     onClickCapture: (e) => { if (dragged.current) { e.stopPropagation(); e.preventDefault(); } },
   };

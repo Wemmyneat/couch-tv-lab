@@ -245,6 +245,10 @@ def _home(h):
         "dock_size": _int(h.get("dock_size"), DOCK_LIMIT, 1, DOCK_LIMIT),
         # your own scenes, in backgrounds/mine/ (docs/MAKE-A-SCENE.md)
         "my_scenes": mine,
+        # couch-tv-lab: apps whose Watch Next rows never show in Keep watching (promo cards, e.g. a
+        # browser's "Start Searching"). Android package names.
+        "watch_next_block": [p for p in dict.fromkeys(h.get("watch_next_block") if isinstance(h.get("watch_next_block"), list) else [])
+                             if isinstance(p, str) and re.fullmatch(r"[A-Za-z0-9_.]{1,200}", p)],
     }
     # Only when config.json gives them. Without "language" the TV home speaks the TV's own language
     # (English if it is not one of LANGUAGES), and without "clock" it uses that language's usual

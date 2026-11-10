@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 
 /**
@@ -70,7 +71,13 @@ class FireWatch : AccessibilityService() {
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        stockInFront = isStockHome(e.packageName?.toString(), e.className?.toString())
+        val pkg = e.packageName?.toString()
+        // couch-tv-lab: couch-tv's own window events don't say who is in front. When the Google home and
+        // couch-tv start within the same second (a Home press while a cast ends, two Home events 0.1 s
+        // apart: seen on a TCL 50P735), couch-tv's event can arrive after the Google home went back on
+        // top, and clearing stockInFront here cancelled the one re-check. Only another app clears it.
+        if (pkg == packageName) return
+        stockInFront = isStockHome(pkg, e.className?.toString())
         if (!stockInFront) return
         if (CrashGuard.standingAside(this)) return
         val wait = DEBOUNCE_MS - (System.currentTimeMillis() - last)
@@ -85,6 +92,26 @@ class FireWatch : AccessibilityService() {
             return
         }
         bringBack()
+    }
+
+    /**
+     * couch-tv-lab: catch the Home key itself. Letting it through made Android open the Google home
+     * first and hold couch-tv's return for its 5 s "app switch" pause (seen on a TCL 50P735 once Google
+     * Assistant was off; with it on, the Google home restarting itself happened to lift the pause after
+     * about 1 s). Caught here, the Google home never comes up. Only the Home key; every other key goes on
+     * untouched. If couch-tv keeps crashing (CrashGuard), Home goes to the TV's own home as before.
+     */
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_HOME) return false
+        if (CrashGuard.standingAside(this)) return false
+        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+            last = System.currentTimeMillis()
+            runCatching {
+                startActivity(Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            }
+        }
+        return true   // the press and the release, so the Google home never sees this Home
     }
 
     private fun bringBack() {

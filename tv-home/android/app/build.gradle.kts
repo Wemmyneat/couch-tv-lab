@@ -13,8 +13,8 @@ android {
         applicationId = "app.couchtv.launcher"
         minSdk = 25          // Android 7.1, so Fire OS 6 sticks (Fire TV Stick 4K, 1st gen) install it
         targetSdk = 34
-        versionCode = 14
-        versionName = "0.12"
+        versionCode = 19
+        versionName = "0.12-lab.5"
         // Where the bridge might be: ./gradlew assembleRelease -PbridgeUrls=http://my-computer.local:5400
         // (comma separated, more than one is fine). The last one that answered is remembered on the TV.
         // Without it, apply.sh tells the app the address when it installs (the "bridge" extra), and
@@ -24,6 +24,9 @@ android {
         // Whose GitHub releases Home settings, Updates offers: -PupdateRepo=owner/name for a fork
         // with releases of its own, -PupdateRepo= (empty) for none. Updater.kt checks the format.
         val updateRepo = (project.findProperty("updateRepo") as String? ?: "Seagey/couch-tv").trim()
+        // couch-tv-lab: -PwebDebug=true turns on WebView remote debugging (chrome://inspect over adb) in a
+        // release build, for diagnosing the home page on a real TV. Off unless asked for.
+        buildConfigField("boolean", "WEB_DEBUG", ((project.findProperty("webDebug") as String?) == "true").toString())
         buildConfigField("String", "UPDATE_REPO", "\"" + updateRepo.filter { it.isLetterOrDigit() || it in "/._-" } + "\"")
     }
     buildFeatures { buildConfig = true }

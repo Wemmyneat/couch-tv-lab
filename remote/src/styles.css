@@ -173,8 +173,8 @@ main { position: relative; z-index: 1; height: 100%; }
 .ask:active { transform: scale(0.97); background: #cfcfd4; transition: none; }
 .ask.quiet { background: var(--glass); color: var(--ink); border: 1px solid var(--rim); box-shadow: none; -webkit-backdrop-filter: blur(28px) saturate(1.7); backdrop-filter: blur(28px) saturate(1.7); }
 /* The tab thumb rides the page scroll (--p goes 0 to 1 as you swipe), like iOS page indicators. */
-.tabs { touch-action: none; position: relative; display: grid; grid-template-columns: 1fr 1fr; align-self: center; padding: 3px; border-radius: 24px; flex: none; }
-.tabs-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 21px; background: rgba(255, 255, 255, 0.2); transform: translateX(calc(var(--p, 0) * 100%)); will-change: transform; }
+.tabs { touch-action: none; position: relative; display: grid; grid-template-columns: 1fr 1fr 1fr; align-self: center; padding: 3px; border-radius: 24px; flex: none; }
+.tabs-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(33.333% - 2px); border-radius: 21px; background: rgba(255, 255, 255, 0.2); transform: translateX(calc(var(--p, 0) * 100%)); will-change: transform; }
 .tabs button { position: relative; height: 44px; padding: 0 20px; border-radius: 21px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--ink-2); transition: color 0.2s; }
 .tabs button.on { color: var(--ink); }
 
@@ -533,3 +533,120 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
   .glass-icons .app-icon:not(.clear) img { opacity: 0.85; mix-blend-mode: normal; }
   .glass-icons .app-icon.clear .glyph { opacity: 1; }
 }
+
+/* couch-tv-lab: custom buttons strip (Lab.jsx) */
+.lab-buttons { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; }
+.lab-buttons::-webkit-scrollbar { display: none; }
+.lab-btn { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
+  border-radius: 22px; font-size: 15px; font-weight: 500; white-space: nowrap; }
+.lab-btn.busy { opacity: 0.55; }
+.app.is-off .lab-buttons { opacity: 0.4; pointer-events: none; }
+.toast.warn { border-color: rgba(255, 196, 0, 0.6); }
+
+/* couch-tv-lab: the Lab tab (Lab.jsx) */
+.lab-page { height: 100%; overflow-y: auto; }
+.lab { display: flex; flex-direction: column; gap: 12px; padding: 12px var(--side, 16px) 96px; }
+.lab-tabs { flex-wrap: wrap; }
+.lab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.lab-card { border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lab-card.list, .lab-card.status, .lab-card.text { grid-column: 1 / -1; }
+.lab-card small { color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.lab-value { font: 700 28px/1.1 var(--font-d, inherit); font-variant-numeric: tabular-nums; }
+.lab-text { font-size: 17px; font-weight: 600; line-height: 1.3; }
+.lab-sub, .lab-err { font-size: 14px; color: var(--ink-2); line-height: 1.35; }
+.lab-card.bad { border: 1px solid rgba(255, 90, 90, 0.5); }
+.lab-card ul { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lab-card li { display: flex; align-items: center; gap: 8px; font-size: 15px; min-width: 0; }
+.lab-card li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lab-card li em { font-style: normal; color: var(--ink-2); font-size: 13px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lab-more { color: var(--ink-2); font-size: 13px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dot.up { background: #3ddc84; } .dot.down { background: #ff5a5a; }
+.lab-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.lab-shots a { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; }
+.lab-shots img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; background: rgba(255,255,255,.06); }
+.lab-shots small { font-size: 12px; color: var(--ink-2); }
+.watch-col .lab { padding-top: 0; }
+
+/* couch-tv-lab: TV widgets editor (Lab.jsx WidgetEditor) */
+.lab { padding-top: max(12px, env(safe-area-inset-top)); }
+.wedit { display: flex; flex-direction: column; gap: 12px; }
+.wgrid { display: grid; gap: 8px; padding: 10px; border-radius: 20px; background: rgba(255,255,255,0.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+.wcell { border-radius: 14px; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.12); }
+.wtile { border-radius: 14px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 0 12px; text-align: left; min-width: 0; }
+.wtile span { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.wtile small { font-size: 12px; color: var(--ink-2); }
+.wtile.on { box-shadow: inset 0 0 0 2px #7cc4ff; background: rgba(124,196,255,0.16); }
+.wtools { display: flex; flex-wrap: wrap; gap: 6px; }
+.wtools .chip { min-width: 44px; }
+.wtools .wremove { color: #ff8a8a; margin-left: auto; }
+.lab-h { margin: 6px 0 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: var(--ink-2); text-transform: uppercase; }
+.wcat { list-style: none; margin: 0; padding: 0; border-radius: 18px; background: rgba(255,255,255,0.05); }
+.wcat li { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 14px; box-shadow: inset 0 -1px 0 rgba(255,255,255,0.06); }
+.wcat li:last-child { box-shadow: none; }
+.wcat li div { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.wcat b { font-size: 15px; } .wcat small { font-size: 12px; color: var(--ink-2); }
+.wadd { width: 36px; height: 36px; border-radius: 18px; background: rgba(124,196,255,0.18); color: #7cc4ff; font-size: 20px; line-height: 1; }
+
+/* couch-tv-lab: Lab tab, actions first */
+.lab-title { margin: 0; font: 700 32px/1.1 var(--font-d, inherit); letter-spacing: -0.02em; }
+.lab-top { display: flex; align-items: center; gap: 10px; }
+.lab-top .lab-title { font-size: 24px; }
+.lab-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lab-chip { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 15px; font-size: 13px; }
+.dot.warn { background: #ffb547; } .dot.idle { background: #5a5a62; }
+.lab-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.lab-tile { height: 88px; border-radius: 20px; padding: 14px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; font-size: 15px; font-weight: 600; }
+.lab-tile.small { height: 72px; }
+.lab-tile small { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.lab-tile.accent { background: rgba(124,196,255,0.16); color: #cfe8ff; }
+.lab-tile[aria-busy="true"] { opacity: 0.55; }
+.hub-sheet { display: flex; flex-direction: column; gap: 10px; padding: 0 var(--side, 16px) 24px; }
+.wadd.on { background: rgba(61,220,132,0.2); color: #3ddc84; }
+.pbar { display: flex; flex-direction: column; gap: 6px; }
+.pbar-row { display: flex; justify-content: space-between; font-size: 14px; }
+.pbar-row span:last-child { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pbar-track { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); }
+.pbar-fill { height: 8px; border-radius: 4px; background: #7cc4ff; }
+.pbar-fill.hot { background: #ffb547; }
+
+/* couch-tv-lab: Remote v2 (lab/PLAN-polish.md, owner's review) */
+.padrow { flex: 1; min-height: 180px; display: flex; gap: 10px; }
+.padrow .pad { flex: 1; min-height: 0; transition: flex-basis 0.25s var(--ease); }
+.vwheel { width: 72px; flex: none; border-radius: 34px; display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 6px;
+  transition: width 0.25s var(--ease), opacity 0.2s; }
+.vwheel .vbtn { width: 48px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+.vwheel .vridges { flex: 1; width: 40px; border-radius: 20px; touch-action: none; cursor: ns-resize;
+  background: repeating-linear-gradient(180deg, rgba(255,255,255,0.22) 0 2px, rgba(255,255,255,0.03) 2px 12px);
+  box-shadow: inset 0 12px 14px -8px rgba(0,0,0,0.85), inset 0 -12px 14px -8px rgba(0,0,0,0.85); }
+.vwheel .vlevel { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; min-height: 22px; display: flex; align-items: center; }
+.vwheel .vout { font-size: 10px; font-weight: 600; color: var(--ink-2); text-align: center; line-height: 1.2; max-width: 64px; }
+/* a finger on the pad: the wheel becomes a thin level bar and the pad takes the room */
+.vwheel.compact { width: 14px; padding: 6px 0; justify-content: flex-end; }
+.vwheel .vbar { flex: 1; width: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); display: flex; align-items: flex-end; overflow: hidden; }
+.vwheel .vfill { width: 100%; background: rgba(255,255,255,0.85); border-radius: 3px; transition: height 0.2s; }
+.controls.v2 { justify-content: space-between; gap: 14px; }
+.controls.v2 .round.big { flex: 1; border-radius: 20px; height: 58px; }
+.playbig { width: 124px; height: 72px; flex: none; border-radius: 36px; background: var(--solid, #f5f5f7); color: var(--on-solid, #0a0a0c);
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 22px rgba(0,0,0,0.45); }
+.playbig:active { transform: scale(0.96); }
+.shortcuts-row { display: flex; align-items: center; gap: 8px; }
+.shortcuts-row .lab-buttons { flex: 1; min-width: 0; }
+.shortcuts-row .more-up { flex: none; color: #7cc4ff; background: rgba(124,196,255,0.16); }
+.tabrow { display: flex; align-items: center; gap: 8px; justify-content: center; }
+.tabrow .tabs { flex: 1; max-width: 420px; }
+.tabrow .tvhome, .wide-home { width: 52px; height: 52px; flex: none; }
+.wide-home { align-self: flex-end; }
+
+/* couch-tv-lab: screenshots gallery (Lab.jsx Shots) */
+.shots { display: flex; flex-direction: column; gap: 12px; }
+.shot { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.shot img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; background: rgba(255,255,255,0.06); }
+.shot small { font-size: 12px; color: var(--ink-2); }
+.more-shots { height: 52px; align-items: center; justify-content: center; }
+.shot-view { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.92); display: flex; flex-direction: column; justify-content: center; gap: 16px;
+  padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom)); }
+.shot-view img { width: 100%; height: auto; border-radius: 12px; }
+.shot-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.shot-actions a.chip { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
+.shot-actions .danger { color: #ff8a8a; box-shadow: inset 0 0 0 1px rgba(255,90,90,0.6); }
