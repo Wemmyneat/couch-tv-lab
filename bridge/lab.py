@@ -299,17 +299,18 @@ def _thumb(name):
     return dst
 
 
-_shots_memo = {"at": 0, "names": None}
+_shots_memo = {"at": 0, "names": None, "gen": 0}
 
 
 def _forget_shots():
-    _shots_memo.update(at=0, names=None)
+    _shots_memo.update(at=0, names=None, gen=_shots_memo["gen"] + 1)
 
 
 def _all_shots():
     """Every screenshot name, newest first; remembered for 10 s and forgotten on save or delete."""
     if _shots_memo["names"] is not None and time.time() - _shots_memo["at"] < 10:
-        return _shots_memo["names"]
+        return list(_shots_memo["names"])
+    gen = _shots_memo["gen"]
     out = []
     if os.path.isdir(SHOT_DIR):
         for day in sorted(os.listdir(SHOT_DIR), reverse=True):
@@ -318,7 +319,8 @@ def _all_shots():
                 out += sorted((n for n in os.listdir(d) if NAME_RE.fullmatch(n)), key=lambda n: n[-21:], reverse=True)
             if len(out) >= 5000:   # a cap, however many years of screenshots pile up
                 break
-    _shots_memo.update(at=time.time(), names=out)
+    if _shots_memo["gen"] == gen:   # nothing was saved or deleted while this scan ran: safe to remember
+        _shots_memo.update(at=time.time(), names=list(out))
     return out
 
 
