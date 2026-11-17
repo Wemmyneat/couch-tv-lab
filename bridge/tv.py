@@ -410,7 +410,9 @@ class TV:
         # couch-tv-lab: the remote protocol's text only lands while the TV has told it a text field is open
         # (its IME state), so it was dropped now and then. ADB types into whatever field has focus, so
         # it goes first when the text survives `input text` whole; anything else uses the remote protocol.
-        if await self.adb_ready():
+        # ADB over the network is not encrypted (the remote protocol is TLS), so a password box, or a TV
+        # that will not say what the box is, always gets the remote protocol.
+        if await self.adb_ready() and not await self._password_field():
             safe = adb_text(text)
             if safe and safe[1:-1].replace("%s", " ") == text:
                 try:
@@ -420,6 +422,19 @@ class TV:
                     self.log.info("adb text failed, trying the remote protocol: %s", e)
         self.require()
         self.remote.send_text(text)
+
+    async def _password_field(self):
+        """True when the focused text box is a password box, or when the TV does not say (couch-tv-lab)."""
+        try:
+            out = await self.adb("shell", "dumpsys", "input_method", timeout=6)
+        except Exception:
+            return True
+        m = re.search(r"inputType=0x([0-9a-fA-F]+)", out)   # the newest editor comes first
+        if not m:
+            return True
+        kind = int(m.group(1), 16)
+        cls, var = kind & 0xF, kind & 0xFF0
+        return (cls == 1 and var in (0x80, 0x90, 0xE0)) or (cls == 2 and var == 0x10)
 
     async def open_link(self, link):
         """Open an https or app-scheme link through the remote protocol (adb_only: `am start`)."""
