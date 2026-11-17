@@ -22,7 +22,8 @@ couch-tv#28, #40), so an app-only install has a dock. The app keeps it as its fi
 later reorder on the TV is kept. "--apps tv" reads the list from the TV itself over LG's network
 remote (the TV must have accepted the remote once: start the bridge with this TV and press
 Accept). Bundled logos (remote/src/app-logos) are used for the tiles, as the TV's own icon
-addresses do not load on several TVs.
+addresses do not load on several TVs. For a baked app with no bundled logo, the build downloads the
+TV's own icon into the package, with certificate checks off (the TV's secure port is self-signed).
 --log-url sends the page's console and a copy of the screen's HTML to a computer, for testing.
 
 The .ipk is made by this script itself: an .ipk is a Debian-style "ar" archive (debian-binary,
@@ -36,11 +37,14 @@ import asyncio
 import io
 import json
 import os
+import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tarfile
 import time
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -93,8 +97,10 @@ def read_apps(path, tv_id):
             raise SystemExit("--apps tv: no LG TV (\"kind\": \"lg\") in config.json" + (f" with id {tv_id}" if tv_id else ""))
         tv = lg.LGTV(cfg)
         if not os.path.exists(tv.key_file):
-            raise SystemExit(f"--apps tv: this TV has not accepted the remote yet ({os.path.relpath(tv.key_file, ROOT)} "
-                             "is missing). Start the bridge with this TV and press Accept on the TV, or use --apps <file>.")
+            # No bridge needed (#219): the connection below pairs by itself and keeps the key.
+            print(f"--apps tv: this TV has not accepted the remote yet ({os.path.relpath(tv.key_file, ROOT)} is missing). "
+                  "Watch the TV: when the prompt appears, move the highlight to Accept, then press OK "
+                  "(this waits 90 seconds).", file=sys.stderr)
 
         async def run():
             await tv._resolve()
@@ -118,10 +124,88 @@ def read_apps(path, tv_id):
     for a in data:
         if isinstance(a, dict) and a.get("id"):
             out.append({"id": str(a["id"]), "title": str(a.get("title") or a["id"]),
-                        "icon": a.get("icon") or a.get("largeIcon") or None})
+                        "icon": a.get("largeIcon") or a.get("icon") or None})   # the 130x130 one first
     if not out:
         raise SystemExit("--apps: the list has no apps")
     return out
+
+
+def css_var_fallbacks(css):
+    """webOS 3.x (Chrome 38) has no CSS variables, so every `var(--safe-x)` drops and the layout loses
+    its margins. Put the plain value just before each declaration that uses only the constants set once
+    in :root: newer engines still read the var() line after it, Chrome 38 keeps the plain one."""
+    root = re.search(r":root\s*\{([^}]*)\}", css)
+    consts = dict(re.findall(r"--([\w-]+)\s*:\s*([^;]+);", root.group(1))) if root else {}
+    consts = {k: v.strip() for k, v in consts.items()
+              if len(re.findall(r"--" + re.escape(k) + r"\s*:", css)) == 1}   # set only in :root
+
+    def sub(m):
+        prop, value = m.group(1), m.group(2)
+        names = re.findall(r"var\(--([\w-]+)", value)
+        if not names or any(n not in consts for n in names):
+            return m.group(0)
+        plain = re.sub(r"var\(--([\w-]+)(?:\s*,[^()]*)?\)", lambda v: consts[v.group(1)], value)
+        return f"{prop}: {plain}; {m.group(0)}"
+    return re.sub(r"(?<![\w-])([a-z-]+)\s*:\s*([^;{}]*var\(--[^;{}]*)", sub, css)
+
+
+def _plain(name):
+    """The app's name the way lg/app/webos.js compares them: lower case, letters and digits only."""
+    return re.sub(r"[^a-z0-9]", "", str(name or "").lower())
+
+
+# LG's own parts, which the app does not show (the same pattern as SYSTEM in lg/app/webos.js)
+LG_SYSTEM = re.compile(r"^(com\.webos\.|com\.palm\.|com\.lge\.|com\.palmdts\.)")
+
+
+def fetch_tv_icons(baked, logos_dir, logos):
+    """Download the TV's own icon for each baked app with no bundled logo, into the package.
+
+    The icon addresses the TV gives are on its self-signed secure port (https://<tv>:3001/...),
+    which the page cannot load, so the tile would show a letter (couch-tv#56). The computer can
+    fetch them with certificate checks off. Each icon is saved under the name lg/app/webos.js
+    looks for: the Android package for an app couch-tv knows, else the LG app id.
+    """
+    by_lg, by_name = {}, {}
+    for app in apps.APPS:
+        w = apps.WEBOS.get(app["id"]) or {}
+        for i in w.get("ids", []):
+            by_lg[i] = app["package"]
+        for n in [app["name"]] + w.get("names", []):
+            by_name[_plain(n)] = app["package"]
+    for lg_id, name in apps.WEBOS_ONLY.items():
+        by_lg[lg_id] = lg_id
+        by_name[_plain(name)] = lg_id
+    insecure = ssl.create_default_context()
+    insecure.check_hostname = False
+    insecure.verify_mode = ssl.CERT_NONE
+    got, failed = 0, []
+    for a in baked:
+        icon = a.get("icon") or ""
+        if not re.match(r"https?://", icon) or LG_SYSTEM.match(a["id"]):
+            continue
+        key = by_lg.get(a["id"]) or by_name.get(_plain(a["title"])) or a["id"]
+        if key in logos:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", key):   # the id becomes a file name
+            failed.append(f"{a['title']} (unusual app id)")
+            continue
+        try:
+            with urllib.request.urlopen(icon, timeout=5, context=insecure) as r:
+                data = r.read(2_000_001)
+        except Exception as e:
+            failed.append(f"{a['title']} ({e})")
+            continue
+        if len(data) > 2_000_000 or not (data.startswith(b"\x89PNG") or data.startswith(b"\xff\xd8")):
+            failed.append(f"{a['title']} (not a PNG or JPEG under 2 MB)")
+            continue
+        with open(os.path.join(logos_dir, key + ".png"), "wb") as f:
+            f.write(data)
+        logos.add(key)
+        got += 1
+    if got or failed:
+        print(f"icons from the TV: {got} saved" + (f", {len(failed)} not: " + "; ".join(failed) if failed else ""))
+    return got
 
 
 def pack_python(stage, info, ipk):
@@ -171,6 +255,7 @@ def pack_ares(stage, ipk):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--bridge", default="", help="the bridge's address, e.g. http://my-computer.local:5400")
+    ap.add_argument("--key", default="", help="pairing key for the bridge API (defaults to pairing_key in config.json)")
     ap.add_argument("--tv", default="", help="this TV's id in config.json (only with more than one TV)")
     ap.add_argument("--apps", default="", metavar="FILE|tv",
                     help="bake this TV's app list into the app (a JSON file, or \"tv\" to read it from the TV)")
@@ -184,7 +269,10 @@ def main():
     stage = os.path.join(OUT, "app")
     if os.path.isdir(stage):
         shutil.rmtree(stage)
-    shutil.copytree(WEB, stage, ignore=shutil.ignore_patterns("mock.js", ".*"))
+    skip = ["mock.js", ".*"]
+    if (config.HOME or {}).get("hi_res") is False:
+        skip.append("*@2x.*")    # home.hi_res false: the 4K copies are never shown, so leave them out
+    shutil.copytree(WEB, stage, ignore=shutil.ignore_patterns(*skip))
     for name in os.listdir(os.path.join(HERE, "app")):
         shutil.copy(os.path.join(HERE, "app", name), stage)
     os.makedirs(os.path.join(stage, "logos"))
@@ -193,6 +281,14 @@ def main():
         if name.endswith(".png"):
             shutil.copy(os.path.join(LOGOS, name), os.path.join(stage, "logos", name))
             logos.add(name[:-4])
+    if baked:
+        fetch_tv_icons(baked, os.path.join(stage, "logos"), logos)
+
+    css_path = os.path.join(stage, "app.css")
+    with open(css_path) as f:
+        css = f.read()
+    with open(css_path, "w") as f:
+        f.write(css_var_fallbacks(css))
 
     # index.html: the LG side loads before the bridge settings and app.js
     index = os.path.join(stage, "index.html")
@@ -212,7 +308,8 @@ def main():
                 "  try { t = localStorage.getItem(\"couch.configjs\"); } catch (e) {}\n"
                 "  if (t) try { (0, eval)(t); } catch (e) {}\n"
                 "  if (!window.COUCH_CONFIG) window.COUCH_CONFIG = " + json.dumps(config.public()) + ";\n})();\n")
-    settings = {"bridge": a.bridge.rstrip("/"), "tv": a.tv, "log": a.log_url.rstrip("/")}
+    key = a.key or config.PAIRING_KEY
+    settings = {"bridge": a.bridge.rstrip("/"), "tv": a.tv, "log": a.log_url.rstrip("/"), "key": key}
     with open(os.path.join(stage, "settings.js"), "w") as f:
         f.write("window.COUCH_WEBOS = " + json.dumps(settings) + ";\n")
     table = {}

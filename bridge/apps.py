@@ -46,6 +46,11 @@ APPS = [
     # and is not pushed behind More apps (#56).
     {"id": "plex", "name": "Plex", "package": "com.plexapp.android", "colour": "#E5A00D",
      "jw": ["plex"], "deeplink": "app"},
+    # Nuvio, a Stremio-style player, is not on JustWatch. Listed so the shows it names in its media
+    # session reach Keep watching. A card opens the show's page by its IMDb id (TITLE_LINKS in
+    # server.py). Its Play Store build is com.nuvio.app (not read here).
+    {"id": "nuvio", "name": "Nuvio", "package": "com.nuvio.tv", "colour": "#111111",
+     "jw": [], "deeplink": "app"},
     {"id": "kayo", "name": "Kayo", "package": "au.com.kayosports.tv", "colour": "#00E676",
      "jw": [], "deeplink": "app"},
     {"id": "foxtel-go", "name": "Foxtel Go", "package": "au.com.foxtel.atv", "colour": "#F05A28",
@@ -63,6 +68,8 @@ APPS = [
     {"id": "twitch", "name": "Twitch", "package": "tv.twitch.android.app", "colour": "#9146FF",
      "jw": [], "deeplink": "app"},
     {"id": "spotify", "name": "Spotify", "package": "com.spotify.tv.android", "colour": "#1DB954",
+     "jw": [], "deeplink": "app"},
+    {"id": "audible", "name": "Audible", "package": "com.audible.application.firetv", "colour": "#F8991D",
      "jw": [], "deeplink": "app"},
     {"id": "moonlight", "name": "Moonlight", "package": "com.limelight", "colour": "#2A2A2A",
      "jw": [], "deeplink": "app"},
@@ -135,12 +142,63 @@ WEBOS_ONLY = {
     "com.atlas.tv": "NOW",
     "dazn": "DAZN",
     "com.crunchyroll.webapp": "Crunchyroll",
+    # Seen on an LG OLED C1 in Belgium, webOS 6.5.3 (#40). Alexa and the ad-free Cobalt YouTube are
+    # sideloaded there, so their titles differ from TV to TV; the id stays the same.
+    "be.vtmgo.app": "VTM GO",
+    "be.vrt.vrtmax": "VRT MAX",
+    "io.strem.tv": "Stremio",
+    "amazon.alexa.view": "Amazon Alexa",
+    "com.cobalt.youtube.adfree": "YouTube Cobalt AdFree",
+    # Seen on an LG QNED88T6A and an LG NANO83A6A in India, webOS 10.3 and webOS 26 (#89).
+    "com.hoichoi.tv": "Hoichoi",
+    "com.mxplayer.lg": "MX Player TV",
+    "com.wavesott.app": "Waves OTT",
+    "com.geforcenow.play": "GeForce NOW",
+    "com.microsoft.xbox": "Xbox",
+    "com.dailymotion.dailymotion": "Dailymotion",
+    "com.apple.applemusic": "Apple Music",
+    "epoxyaisports": "LG Sports Playbook",
+}
+
+# Roku channel ids, for a TV with "kind": "roku" (bridge/roku.py, docs/ROKU.md). Built from Roku's
+# documentation and community lists, NOT checked on a real Roku. Only these four ids were confirmed
+# from pages that were read (Netflix 12, YouTube 837, Hulu 2285 and Prime Video 13, in
+# github.com/zakwht/roku docs/api.md and forum.developer.roku.com/t/external-control-app-id-help/1975).
+# The rest are the ids Roku's channel store URLs and community lists give and are UNVERIFIED: the
+# driver only uses an id when the Roku's own app list (query/apps) contains it, and otherwise finds
+# the app by its name ("names", the titles a Roku lists it under, which differ by country). Roku
+# channels in Australia are fewer than in the US: ABC iview, SBS On Demand and 10play were reported
+# missing from some Australian stores, so they only show if the Roku lists them.
+ROKU = {
+    "netflix": {"ids": ["12"]},
+    "youtube": {"ids": ["837"]},
+    "prime-video": {"ids": ["13"], "names": ["Amazon Prime Video", "Prime Video"]},
+    "hulu": {"ids": ["2285"]},
+    "disney-plus": {"ids": ["291097"], "names": ["Disney+", "Disney Plus"]},
+    "hbo-max": {"ids": ["61322"], "names": ["Max", "HBO Max"]},
+    "paramount-plus": {"ids": ["31440"], "names": ["Paramount+", "Paramount Plus"]},
+    "peacock": {"ids": ["593099"], "names": ["Peacock TV", "Peacock"]},
+    "apple-tv": {"ids": ["551012"], "names": ["Apple TV", "Apple TV+"]},
+    "plex": {"ids": ["13535"]},
+    "spotify": {"ids": ["22297"]},
+    "twitch": {"ids": ["50539"]},
+    "youtube-tv": {"ids": ["195316"], "names": ["YouTube TV"]},
+    "stan": {"ids": [], "names": ["Stan"]},
+    "binge": {"ids": [], "names": ["BINGE", "Binge"]},
+    "abc-iview": {"ids": [], "names": ["ABC iview", "iview"]},
+    "sbs-on-demand": {"ids": [], "names": ["SBS On Demand"]},
+    "9now": {"ids": [], "names": ["9Now"]},
+    "7plus": {"ids": [], "names": ["7plus"]},
+    "10play": {"ids": [], "names": ["10", "10 play", "10play"]},
+    "kayo": {"ids": [], "names": ["Kayo Sports", "Kayo"]},
+    "foxtel-go": {"ids": [], "names": ["Foxtel Go", "Foxtel"]},
 }
 
 BY_ID = {a["id"]: a for a in APPS}
 TIZEN_TO_PACKAGE = {tid: BY_ID[aid]["package"] for aid, t in TIZEN.items()
                     for tid in t["ids"] + ([t["app"]] if t.get("app") else [])}
 WEBOS_TO_PACKAGE = {lid: BY_ID[aid]["package"] for aid, w in WEBOS.items() for lid in w["ids"]}
+ROKU_TO_PACKAGE = {rid: BY_ID[aid]["package"] for aid, r in ROKU.items() for rid in r["ids"]}
 BY_PACKAGE = {a["package"]: a for a in APPS}
 BY_JW = {jw: a for a in APPS for jw in a["jw"]}
 

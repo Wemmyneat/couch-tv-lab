@@ -8,7 +8,7 @@ android {
     compileSdk = 34
     defaultConfig {
         applicationId = "dev.couchtv.ontv"
-        minSdk = 25          // Android 7.1 (Fire OS 6). Wireless debugging pairing needs Android 11+ on the TV.
+        minSdk = 23          // Android 6.0. Wireless debugging pairing needs Android 11+ on the TV.
         targetSdk = 34
         versionCode = 12
         versionName = "0.12"
@@ -51,6 +51,10 @@ dependencies {
     implementation("org.conscrypt:conscrypt-android:2.5.3")
     // Makes the self-signed certificate the ADB TLS handshake needs.
     implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
+    // Unit tests for the plain Kotlin rules (KeepMergeTest), run with testDebugUnitTest (EPL 1.0).
+    testImplementation("junit:junit:4.13.2")
+    // A real org.json for the tests that read and build JSON (AskWireTest): Android's own copy is only a stub on a computer (JSON licence).
+    testImplementation("org.json:json:20240303")
 }
 
 // The phone remote and the TV home are built elsewhere in the repo. Copy them in before every build.

@@ -35,11 +35,11 @@ jobs:
           python-version: "3.11"
 
       - name: Bridge and tools compile
-        run: python -m py_compile bridge/*.py scripts/*.py tv-home/tools/*.py
+        run: python -m py_compile bridge/*.py scripts/*.py tv-home/tools/*.py sync/sync.py
 
       - name: Shell scripts parse
         # each with the shell its first line names (privacy-scan.sh is bash, the rest plain sh)
-        run: for f in scripts/*.sh tv-home/tools/*.sh; do if head -1 "$f" | grep -q bash; then bash -n "$f"; else sh -n "$f"; fi; done
+        run: for f in scripts/*.sh tv-home/tools/*.sh sync/*.sh; do if head -1 "$f" | grep -q bash; then bash -n "$f"; else sh -n "$f"; fi; done
 
       - name: Android platform 34
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" > /dev/null
@@ -55,6 +55,9 @@ jobs:
 
       - name: Build the TV apps
         run: sh scripts/build-apk.sh
+
+      - name: On-TV app unit tests
+        run: tv-home/android/gradlew -p on-tv/android --no-daemon -q testDebugUnitTest
 
       - name: Signing fingerprints
         run: for f in dist/*.apk; do echo "$f"; "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$f" | grep -i "SHA-256"; done

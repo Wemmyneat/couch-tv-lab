@@ -55,7 +55,7 @@ object Store {
 
     /** The public config the TV home and the phone remote read (same shape as the computer bridge). */
     fun publicConfig(): JSONObject = JSONObject()
-        .put("people", people())
+        .put("people", Kids.attach(people()))   // a kids profile carries its shelf and its PIN's hash, never the PIN
         .put("weather", weather())
         .put("tvs", JSONArray().put(JSONObject().put("id", TV_ID).put("name", tvName()).also {
             // Only a Fire TV changes: its quick buttons gain Bluetooth and Network (its long-press
@@ -65,8 +65,23 @@ object Store {
         }))
         .put("default_tv", TV_ID)
         .put("mode", "on-tv")
+        // HDMI ports pinned as dock tiles, in the TV home's home.inputs shape (docs/CONFIG.md).
+        // Left out when none are set, so the home is exactly as before.
+        .also { c -> inputs().takeIf { it.length() > 0 }?.let { c.put("home", JSONObject().put("inputs", it)) } }
+
+    /** Pinned inputs: [{port, label, icon, id?}], set from /api/settings "inputs". */
+    fun inputs(): JSONArray = str("inputs")?.let { runCatching { JSONArray(it) }.getOrNull() } ?: JSONArray()
 
     fun tvName(): String = str("tv_name", "This TV") ?: "This TV"
+
+    /** Watch Next in Keep watching (#122), with the TV home app's names and limits (docs/CONFIG.md):
+     *  packages never listed, and at most this many cards from any one app (1 to 20, 5 if unset). */
+    fun skipWatchNext(): Set<String> = runCatching {
+        val a = JSONArray(str("skip_watch_next") ?: "[]")
+        (0 until a.length()).map { a.optString(it) }.filter { PACKAGE.matches(it) }.toSet()
+    }.getOrDefault(emptySet())
+    fun watchNextPerApp(): Int = (str("watch_next_per_app")?.toIntOrNull() ?: 5).coerceIn(1, 20)
+    val PACKAGE = Regex("[A-Za-z0-9_.]{1,200}")
 
     const val TV_ID = "this-tv"
 
@@ -83,6 +98,21 @@ object Store {
      *  play was logged to nobody). */
     fun who(): String? = str("who")
     fun saveWho(v: String?) = putStr("who", v)
+
+    fun smartIdle(): JSONObject {
+        val hs = (readJson("home-settings.json") as? JSONObject)?.optJSONObject("smart_idle") ?: JSONObject()
+        val qh = hs.optJSONObject("quiet_hours") ?: JSONObject()
+        val paused = hs.optInt("paused_idle_minutes", 30).let { if (it in listOf(0, 10, 15, 20, 30, 45, 60)) it else 30 }
+        val qMin = qh.optInt("idle_minutes", 15).let { if (it in listOf(5, 10, 15, 20, 30)) it else 15 }
+        return JSONObject()
+            .put("enabled", hs.optBoolean("enabled", false))
+            .put("paused_idle_minutes", paused)
+            .put("quiet_hours", JSONObject()
+                .put("enabled", qh.optBoolean("enabled", false))
+                .put("start", qh.optString("start", "23:00"))
+                .put("end", qh.optString("end", "06:00"))
+                .put("idle_minutes", qMin))
+    }
 
     /** Test knobs for the emulator tests only, set with `adb shell setprop`; a TV never has them.
      *  debug.couchtv.seen_after_s: seconds a title plays before it counts (default 60).

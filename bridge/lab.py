@@ -103,8 +103,10 @@ BUTTONS = _buttons()
 
 async def _self(method, path, payload, tv_id):
     url = f"http://127.0.0.1:{S.PORT}{path}" + (f"?tv={tv_id}" if tv_id else "")
+    # once bridge.pairing_key is set (upstream couch-tv#73), every API call needs it, the bridge's own included
+    h = {"Authorization": f"Bearer {config.PAIRING_KEY}"} if getattr(config, "PAIRING_KEY", "") else {}
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45)) as s:
-        async with s.request(method, url, json=payload) as r:
+        async with s.request(method, url, json=payload, headers=h) as r:
             j = await r.json(content_type=None)
             if not j.get("ok"):
                 raise RuntimeError(j.get("error") or f"{path} failed")
