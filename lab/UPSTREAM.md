@@ -34,11 +34,18 @@ Upstream will keep solving problems we solved first. Taking their version shrink
 Every week or two, and before any release:
 
 ```sh
-lab/sync-upstream.sh            # new branch sync/upstream-<date>, merge upstream/main, run every check
+lab/sync-upstream.sh            # new branch sync/upstream-<date>, merge upstream/main, then stop
 ```
 
-It stops on conflicts and lists them. Resolve each (rule 2 first), then run it again with `--check`. When the
-checks pass:
+It stops after the merge, so **nothing from upstream runs before you've looked at it**, and lists any conflicts.
+Resolve them (rule 2 first), and review what came in, especially dependency and script changes (the script prints
+the commands). Then run the checks, which install, test and build, so they run upstream's code:
+
+```sh
+lab/sync-upstream.sh --check    # any test failure stops it (a known upstream failure is listed by name)
+```
+
+When the checks pass:
 1. `lab/deploy.sh --remote`, build and install the TV app (README "Building the app"), and run the TV checklist:
    - Home from an app, and a double Home press;
    - Night look toggle, the widget grid, Keep watching;
