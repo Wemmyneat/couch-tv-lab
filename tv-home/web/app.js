@@ -575,22 +575,101 @@
   // couch-tv-lab: the widget grid. Layout and values come from the bridge (bridge/lab.py, GET /api/lab/layout):
   // a fixed cols x rows grid, each widget at its own cell and size, empty cells left empty. Display only:
   // nothing here takes focus, so the remote moves exactly as before. Edited from the phone (Lab, TV widgets).
+  // couch-tv-lab: panels (bridge/lab.py PANELS) pack several values into one widget: rings, dots, a map.
+  var LAB_GREEN = "#3ddc84", LAB_AMBER = "#ffb340", LAB_RED = "#ff5a5a", LAB_BLUE = "#7cc4ff";
+  function labScoreColour(n) { return n == null ? "rgba(255,255,255,0.3)" : n >= 70 ? LAB_GREEN : n >= 40 ? LAB_AMBER : LAB_RED; }
+  function labLoadColour(n) { return n == null ? "rgba(255,255,255,0.3)" : n < 75 ? LAB_BLUE : n < 90 ? LAB_AMBER : LAB_RED; }
+  function labRing(pct, colour, inner, cls) {
+    var r = 15.5, c = 2 * Math.PI * r, p = Math.max(0, Math.min(100, pct || 0));
+    return '<span class="ring ' + (cls || "") + '"><svg viewBox="0 0 36 36" aria-hidden="true">' +
+      '<circle cx="18" cy="18" r="' + r + '" class="track"/>' +
+      '<circle cx="18" cy="18" r="' + r + '" class="bar" stroke="' + colour + '" stroke-dasharray="' + c.toFixed(2) +
+      '" stroke-dashoffset="' + (c * (1 - p / 100)).toFixed(2) + '"/></svg><em>' + (inner == null ? "" : inner) + "</em></span>";
+  }
+  function labNetmap(nodes) {
+    // a left-to-right tree: depth is the column, leaves take rows in order, a parent sits between its children
+    var by = {}, kids = {}, roots = [];
+    nodes.forEach(function (n) { by[n.id] = n; kids[n.id] = []; });
+    nodes.forEach(function (n) { if (n.parent && by[n.parent]) kids[n.parent].push(n); else roots.push(n); });
+    var row = 0, maxD = 0, pos = {};
+    function place(n, d) {
+      maxD = Math.max(maxD, d);
+      if (!kids[n.id].length) { pos[n.id] = { d: d, y: row++ }; return pos[n.id].y; }
+      var ys = kids[n.id].map(function (k) { return place(k, d + 1); });
+      pos[n.id] = { d: d, y: (ys[0] + ys[ys.length - 1]) / 2 };
+      return pos[n.id].y;
+    }
+    roots.forEach(function (n) { place(n, 0); });
+    var W = 400, H = 200, padX = 14, padY = 22;
+    function xy(id) { var p = pos[id]; return [padX + (maxD ? p.d / maxD : 0) * (W - 2 * padX - 70), padY + (row > 1 ? p.y / (row - 1) : 0.5) * (H - 2 * padY)]; }
+    var lines = "", dots = "";
+    nodes.forEach(function (n) {
+      var a = xy(n.id);
+      if (n.parent && by[n.parent]) {
+        var b = xy(n.parent), mx = (a[0] + b[0]) / 2;
+        lines += '<path d="M' + b[0] + " " + b[1] + " C" + mx + " " + b[1] + " " + mx + " " + a[1] + " " + a[0] + " " + a[1] + '" class="' + (n.ok ? "" : "down") + '"/>';
+      }
+      dots += '<circle cx="' + a[0] + '" cy="' + a[1] + '" r="5" fill="' + (n.ok ? LAB_GREEN : LAB_RED) + '"/>' +
+        '<text x="' + (a[0] + 9) + '" y="' + (a[1] + 4) + '">' + esc(n.label) + (n.svc ? ' <tspan class="svc">' + n.svc_up + "/" + n.svc + "</tspan>" : "") + "</text>";
+    });
+    return '<svg class="netmap" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' + lines + dots + "</svg>";
+  }
+  function labPanel(w, it) {
+    var wide = it.w > 1, tall = it.h > 1;
+    if (w.kind === "internet") {
+      var ring = labRing(w.score, labScoreColour(w.score), w.score == null ? "–" : w.score, "big");
+      if (!wide) return ring + '<div class="pv"><b>' + esc(w.network) + "</b><span>" + esc(w.label) + "</span></div>";
+      return ring + '<div class="pv"><small>Internet · ' + esc(w.label) + "</small><b>" + esc(w.network) + "</b>" +
+        '<span class="speeds"><i class="dn">↓</i> ' + esc(w.down) + ' <i class="up">↑</i> ' + esc(w.up) +
+        (w.devices != null ? " · " + esc(w.devices) + " devices" : "") + "</span></div>";
+    }
+    if (w.kind === "homelab") {
+      return '<div class="nodes">' + (w.nodes || []).map(function (n) {
+        if (!n.online) return '<div class="node off"><small>' + esc(n.label) + "</small><b>offline</b></div>";
+        return '<div class="node">' + labRing(n.cpu, labLoadColour(n.cpu), esc(n.cpu) + "<u>CPU</u>") + labRing(n.mem, labLoadColour(n.mem), esc(n.mem) + "<u>RAM</u>") +
+          '<div class="pv"><b>' + esc(n.label) + "</b><span>" + esc(n.guests) + (n.guests === 1 ? " guest" : " guests") + "</span></div></div>";
+      }).join("") + "</div>";
+    }
+    if (w.kind === "services") {
+      var down = (w.items || []).filter(function (x) { return !x.ok; });
+      var head = '<small>Services</small><b class="' + (down.length ? "warn" : "") + '">' + w.up + "<i>/" + w.total + "</i></b>";
+      if (tall) return head + '<ul class="cols">' + (w.items || []).map(function (x) {
+        return '<li><i class="dot ' + (x.ok ? "up" : "down") + '"></i>' + esc(x.label) + "</li>"; }).join("") + "</ul>";
+      var dots = '<span class="dots">' + (w.items || []).map(function (x) { return '<i class="dot ' + (x.ok ? "up" : "down") + '"></i>'; }).join("") + "</span>";
+      var note = down.length ? down.map(function (x) { return x.label; }).slice(0, 3).join(", ") + " down" : "All running";
+      return '<div class="pv">' + head + "</div>" + (wide ? '<div class="pv grow">' + dots + "<span>" + esc(note) + "</span></div>" : "");
+    }
+    if (w.kind === "netmap") return labNetmap(w.nodes || []);
+    if (w.kind === "study") {
+      var pct = w.day && w.total ? 100 * w.day / w.total : 0;
+      return labRing(pct, LAB_BLUE, w.day ? esc(w.day) + "<u>of " + esc(w.total) + "</u>" : "–", "big") +
+        '<div class="pv"><small>' + esc((w.emoji ? w.emoji + " " : "") + "Studying · day " + (w.day || "–")) + "</small><b class=\"t\">" + esc(w.course) + "</b>" +
+        (wide ? "<span>" + esc(w.lesson || "") + "</span>" : "") + "</div>";
+    }
+    if (w.kind === "today") {
+      return '<div class="nums">' + (w.items || []).map(function (x) {
+        return '<div><b class="' + (x.warn ? "warn" : "") + '">' + esc(x.value) + "</b><small>" + esc(x.label) + "</small></div>"; }).join("") + "</div>";
+    }
+    if (w.kind === "photos") return '<div class="pv"><small>Photos</small><b>' + esc(w.images != null ? w.images.toLocaleString() : "–") + "</b><span>" + esc((w.videos || 0) + " videos") + "</span></div>";
+    return "<b>–</b>";
+  }
   function refreshLab() {
     var el = $("lab-strip");
     if (!el) return;
     if (OFFLINE || !NIGHT) { el.innerHTML = ""; return; }
     api("GET", "/api/lab/layout", null, 15000).then(function (j) {
       el.style.gridTemplateColumns = "repeat(" + (j.cols || 2) + ", minmax(0, 1fr))";
-      el.style.gridTemplateRows = "repeat(" + (j.rows || 4) + ", 6rem)";
+      el.style.gridTemplateRows = "repeat(" + (j.rows || 4) + ", var(--lab-row))";
       el.innerHTML = (j.items || []).map(function (it) {
-        var w = it.widget || {}, body = "";
-        if (!w.ok) body = "<b>–</b>";
-        else if (w.items) body = "<ul>" + w.items.map(function (x) {
+        var w = it.widget || {}, body = "", kind = w.type === "panel" ? " panel p-" + esc(w.kind) : "";
+        if (!w.ok) body = "<small>" + esc(w.title) + "</small><b>–</b>" + (w.error ? "<span>" + esc(w.error) + "</span>" : "");
+        else if (w.type === "panel") body = labPanel(w, it);
+        else if (w.items) body = "<small>" + esc(w.title) + "</small><ul>" + w.items.map(function (x) {
           return "<li><i class=\"dot " + (x.ok === false ? "down" : x.ok ? "up" : "") + "\"></i>" + esc(x.title) + "</li>";
         }).join("") + "</ul>";
-        else body = "<b>" + esc(w.value) + "</b>" + (w.sub ? "<span>" + esc(w.sub) + "</span>" : "");
-        return '<div class="lab-card ' + esc(w.type || "") + (w.ok ? "" : " bad") + '" style="grid-column:' + (it.x + 1) + " / span " + it.w +
-          ";grid-row:" + (it.y + 1) + " / span " + it.h + '"><small>' + esc(w.title) + "</small>" + body + "</div>";
+        else body = "<small>" + esc(w.title) + "</small><b>" + esc(w.value) + "</b>" + (w.sub ? "<span>" + esc(w.sub) + "</span>" : "");
+        return '<div class="lab-card ' + esc(w.type || "") + kind + (it.w > 1 ? " wide" : "") + (it.h > 1 ? " tall" : "") + (w.ok ? "" : " bad") +
+          '" style="grid-column:' + (it.x + 1) + " / span " + it.w + ";grid-row:" + (it.y + 1) + " / span " + it.h + '">' + body + "</div>";
       }).join("");
     }, function () { el.innerHTML = ""; });
   }
@@ -1122,6 +1201,13 @@
   // The next scene is readied this long before its turn (today's 2 s after the fade kept two full
   // scenes decoded for the whole turn); short turns keep the old timing.
   var PRE_READY_MS = 3000, preReadyTimer = null, switching = false, pendingScene = -1;
+  // couch-tv-lab: tell the bridge which wallpaper is up, so the phone remote wears the same one at home.
+  // Only the bundled scenes (a path under backgrounds/); your own photos stay on the TV.
+  function labScene(s) {
+    var src = s && !s.own && s.photo ? "backgrounds/" + s.photo + ".jpg" : "";
+    if (!src || PREVIEW || MOCK || OFFLINE) return;
+    api("POST", "/api/lab/scene", { image: src }).then(null, function () {});
+  }
   function showScene(i, hops) {
     if (switching) return;   // a fade is waiting for its photo: the next tick comes round
     var prev = scene, s = SCENES[i], el = sceneEls[i];
@@ -1158,6 +1244,7 @@
     }, 600);
     sceneEls[i].classList.add("on");
     if (prev !== i) sceneEls[prev].classList.remove("on");
+    labScene(SCENES[i]);
     // after the fade, give the other scenes' pictures back; the next one is readied just before its turn
     var lead = SCENE_MS > 10000 ? SCENE_MS - PRE_READY_MS : 2000;
     setTimeout(function () {

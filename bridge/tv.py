@@ -143,6 +143,21 @@ def adb_text(text):
     return f"'{kept}'" if kept else ""
 
 
+# couch-tv-lab: Android's EditorInfo.inputType, class (low 4 bits) and variation (0xFF0).
+_PLAIN_TEXT_VARIATIONS = {0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0xA0, 0xB0, 0xC0, 0xD0}
+
+
+def _password_kind(k):
+    cls, var = k & 0xF, k & 0xFF0
+    return (cls == 1 and var in (0x80, 0x90, 0xE0)) or (cls == 2 and var == 0x10)
+
+
+def _plain_editor(k):
+    """Only a text box positively known not to hold a secret: plain text kinds, a plain number, a phone."""
+    cls, var = k & 0xF, k & 0xFF0
+    return (cls == 1 and var in _PLAIN_TEXT_VARIATIONS) or (cls == 2 and var == 0) or cls == 3
+
+
 class TV:
     kind = "android"
     can_read_media = True   # what is playing, from the media session (ADB)
@@ -407,8 +422,34 @@ class TV:
             if safe:
                 await self.adb("shell", "input", "text", safe, timeout=10)
             return
+        # couch-tv-lab: the remote protocol's text only lands while the TV has told it a text field is open
+        # (its IME state), so it was dropped now and then. ADB types into whatever field has focus, so
+        # it goes first when the text survives `input text` whole; anything else uses the remote protocol.
+        # ADB over the network is not encrypted (the remote protocol is TLS), so a password box, or a TV
+        # that will not say what the box is, always gets the remote protocol.
+        if await self.adb_ready() and not await self._password_field():
+            safe = adb_text(text)
+            if safe and safe[1:-1].replace("%s", " ") == text:
+                try:
+                    await self.adb("shell", "input", "text", safe, timeout=10)
+                    return
+                except Exception as e:
+                    self.log.info("adb text failed, trying the remote protocol: %s", e)
         self.require()
         self.remote.send_text(text)
+
+    async def _password_field(self):
+        """True unless the TV's editors are all plainly not passwords (couch-tv-lab). Deny by default:
+        no answer, no text box (TYPE_NULL), an unknown kind, or a password box anywhere in the TV's
+        recent editors (not only the newest) all count as a password box."""
+        try:
+            out = await self.adb("shell", "dumpsys", "input_method", timeout=6)
+        except Exception:
+            return True
+        kinds = [int(h, 16) for h in re.findall(r"inputType=0x([0-9a-fA-F]+)", out)]
+        if not kinds or not _plain_editor(kinds[0]):
+            return True
+        return any(_password_kind(k) for k in kinds)
 
     async def open_link(self, link):
         """Open an https or app-scheme link through the remote protocol (adb_only: `am start`)."""

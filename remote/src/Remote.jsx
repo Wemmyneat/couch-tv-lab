@@ -63,9 +63,12 @@ export function TopBar({ people, tvName, who, setWho, tv, appInfo, reach, sleepL
     sleepLeft && <span key="sleep"><Ic.Moon size={12} /> {sleepLeft}</span>,
     !isApp && <span key="st">{status}</span>,
   ].filter(Boolean);
+  // couch-tv-lab: one person has nothing to switch between ("Both" is everyone together), so the bar shows
+  // the TV and its state on the left instead.
+  const solo = (people || []).length <= 1;
   return (
-    <header className="topbar">
-      <WhoSwitch people={people} who={who} setWho={setWho} />
+    <header className={`topbar ${solo ? 'solo' : ''}`}>
+      {!solo && <WhoSwitch people={people} who={who} setWho={setWho} />}
       <div className={`tvname ${parts.length ? '' : 'is-app'}`}>
         <b>{tvName || t('tv')}</b>
         <span>{parts.length ? parts.reduce((acc, p, i) => (i ? [...acc, ' · ', p] : [p]), []) : status}</span>

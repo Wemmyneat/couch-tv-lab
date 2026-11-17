@@ -84,6 +84,38 @@ skipped (and logged), never half-run.
   **Lab strip** on the TV's Night look, top right (stat and text widgets only). Display only, so remote navigation
   on the TV is unchanged.
 
+## Packed widgets: `"type": "panel"`, `lab.services`, `lab.netmap`
+A panel packs several live values into one widget, drawn on the TV (rings, dots, a map) and on the phone's
+Lab tab. The bridge computes each one (`bridge/lab.py`, `PANELS`); the TV and the phone only draw it.
+
+```json
+"widgets": [
+  {"id": "internet", "type": "panel", "kind": "internet", "title": "Internet", "sizes": [[2, 1], [1, 1]]},
+  {"id": "homelab",  "type": "panel", "kind": "homelab",  "title": "Homelab",  "sizes": [[2, 1]]},
+  {"id": "services", "type": "panel", "kind": "services", "title": "Services", "sizes": [[2, 1], [2, 2], [1, 1]]},
+  {"id": "netmap",   "type": "panel", "kind": "netmap",   "title": "Network map", "sizes": [[2, 2]]}
+],
+"services": [{"id": "immich", "label": "Immich", "host": "192.168.0.10", "port": 2283, "on": "wemserver"}],
+"netmap":   [{"id": "router", "label": "MTN 5G", "host": "192.168.0.1", "port": 80, "parent": "internet"}]
+```
+
+| kind | What it shows |
+|---|---|
+| `internet` | the router's signal score, the same formula as the MTN router page (60% SINR from -5 to 25 dB, 40% RSRP from -120 to -70 dBm, on the 5G side when the router is on 5G), the network, live ↓ ↑ speed, devices |
+| `homelab` | every `lab.proxmox` node: CPU and memory rings, guests running |
+| `services` | a TCP check of each `lab.services` entry every 30 s; `on` names the `lab.netmap` node it runs on |
+| `netmap` | `lab.netmap` as a tree (`parent`), each node green or red, with how many of its services answer |
+| `study` | the DisplayOS hub's first study track: day of total, today's lesson |
+| `today` | the hub's counts: due today, overdue, habits left, reminders |
+| `photos` | Immich photo and video counts; the `IMMICH_API_KEY` needs the `asset.statistics` permission |
+
+The phone's Lab tab reads the same panels from `GET /api/lab/overview`.
+
+## The remote's background at home
+While the TV shows its home screen, the phone remote wears the TV's own wallpaper: the TV home reports the
+bundled scene it shows (`POST /api/lab/scene`), and the phone reads it (`GET /api/lab/scene`). Your own
+photos are not sent; with one of them up, the phone keeps the last bundled scene.
+
 ## Keep watching: `home.watch_next_block`
 Package names whose Android Watch Next rows are promos, not shows: `["com.tcl.browser"]` (TCL BrowseHere's
 "Start Searching" cards).
