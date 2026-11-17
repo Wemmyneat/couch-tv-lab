@@ -491,7 +491,9 @@ class TV:
     async def installed_packages(self):
         if not await self.adb_ready():
             return None
-        out = await self.adb("shell", "pm", "list", "packages")
+        # couch-tv-lab: enabled packages only (-e). A disabled app (debloated, or switched off by its owner)
+        # cannot be opened, so the phone remote must not offer it.
+        out = await self.adb("shell", "pm", "list", "packages", "-e")
         return {line.split(":", 1)[1].strip() for line in out.splitlines() if ":" in line}
 
 

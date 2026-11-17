@@ -1,0 +1,56 @@
+# TCL 50P735 (G03_4K_GB, BeyondTV4, Android 11, build AR09) debloat list
+# Based on CleanYourTV examples/tcl-50p735 (MIT, github.com/Gathin23/cleanyourtv), checked against this TV's
+# real package list on 2026-11-09 (all 30 upstream packages are installed here), plus 4 additions marked [+].
+# Everything is DISABLED for user 0 (pm disable-user), never uninstalled. Comment out a line to keep that app.
+
+# --- 1. Telemetry ---
+com.tcl.bi                                  # TCL analytics (18 MB RAM)
+com.tcl.logkit                              # TCL log upload
+
+# --- 2. Promos, content rows, Google extras ---
+com.tcl.partnercustomizer                   # TCL partner rows/app placements on the home
+com.tcl.waterfall.overseas                  # TCL content feed
+com.tcl.tv.tclhome_passive                  # TCL home promo service
+com.tcl.esticker                            # on-screen promo stickers
+com.tcl.channelplus                         # TCL Channel (free ad-supported IPTV)
+com.tcl.overseasappshow                     # promoted-app showcase (11 MB)
+com.google.android.videos                   # Google TV "Shop"/Play Movies
+com.google.android.play.games               # Play Games
+com.google.android.youtube.tvmusic          # YouTube Music (re-enable if you use it on the TV)
+com.google.android.feedback                 # Google feedback reporter
+com.google.android.onetimeinitializer       # first-boot initializer, already done
+com.google.android.partnersetup             # partner app installs
+android.autoinstalls.config.google.gtvpai   # Google TV auto-install of promoted apps
+com.google.android.apps.nbu.smartconnect.tv # "Smart connect" phone pairing promos
+
+# --- 3. TCL tools you have replacements for ---
+com.tcl.guard                               # "cleaner" (20 MB)
+com.tcl.suspension                          # floating overlay ball
+com.tcl.gamebar                             # game overlay
+com.tcl.ocean.instructions                  # e-manual
+com.tcl.keyhelp                             # remote key help
+com.tcl.ui_mediaCenter                      # TCL USB media player (you have VLC and Nova for the SSD)
+com.tcl.browser                             # TCL "BrowseHere": pushes promo cards into Watch Next; re-enabled itself once
+com.tcl.messagebox                          # TCL message/notification box (13 MB)
+com.tcl.useragreement                       # TCL terms prompts
+com.tcl.t_solo                              # TCL solo/promo service
+com.tcl.hearaid                             # hearing-aid audio mode (re-enable if needed)
+com.tcl.dashboard                           # TCL dashboard app
+com.tcl.versionUpdateApp                    # TCL firmware/OTA updater: your choice, off
+com.tcl.android.webview                     # TCL's second WebView (active one is com.google.android.webview 156)
+
+# --- 4. Additions [+] from your decisions ---
+com.tcl.smartalexa                          # [+] Alexa (16 MB). Google Assistant stays.
+com.tcl.assistant                           # [+] TCL's own voice assistant
+com.tcl.MultiScreenInteraction_TV           # [+] TCL phone-app link/T-Cast (18 MB). couch-tv and Google remotes replace it.
+com.tcl.usercenter                          # [+] TCL account
+
+# --- 5. Voice, off by owner's choice (2026-11-09): the phone remote and iOS Shortcuts replace it ---
+com.google.android.katniss                  # Google Assistant / voice search (~60 MB)
+com.google.android.tv.assistant             # Assistant on Google TV
+
+# --- KEEP (never put these in this list) ---
+# launcherx, tungsten.setupwraith (couch-tv boot-loop lesson),
+# tcl.tv, tcl.tvinput, tcl.system.server, tcl.settings, tcl_bt_rcu_service, autopair, micmanager (the remote),
+# tcl.inputmethod.international, mediashell (Chromecast), miracast, gms, gsf, google.android.webview,
+# tts, talkback, tcl.gallery, providers.*, packageinstaller, permissioncontroller

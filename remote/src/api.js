@@ -8,6 +8,7 @@ export class ApiError extends Error {
 // nothing is added to any call, exactly as before more than one TV existed.
 let tvId = null;
 export const setTvId = (id) => { tvId = id || null; };
+export const getTvId = () => tvId;
 const withTv = (path) => (tvId ? `${path}${path.includes('?') ? '&' : '?'}tv=${encodeURIComponent(tvId)}` : path);
 
 // Every call gives up in the end, so the app never sits on "Loading" for ever.
@@ -58,6 +59,23 @@ export const api = {
   setSleep: (minutes) => call('POST', '/api/sleep', { minutes }),
   openScreen: (id) => call('POST', '/api/screens/open', { id }),
   tvs: () => call('GET', '/api/tvs'),
+  // couch-tv-lab (bridge/lab.py)
+  labButtons: () => call('GET', '/api/lab/buttons'),
+  labAction: (id) => call('POST', `/api/lab/action/${encodeURIComponent(id)}`, {}, 60000),
+  screenshots: (before) => call('GET', `/api/screenshots?limit=20${before ? `&before=${encodeURIComponent(before)}` : ''}`),
+  deleteShot: (name) => call('POST', `/api/screenshots/${encodeURIComponent(name)}/delete`, {}),
+  labPages: () => call('GET', '/api/lab/pages'),
+  labWidgets: () => call('GET', '/api/lab/widgets'),
+  labStatus: () => call('GET', '/api/lab/status', null, 15000),
+  labAudioOut: () => call('GET', '/api/lab/audio-out', null, 15000),
+  labWall: () => call('POST', '/api/lab/wall/show', {}, 30000),
+  labOpen: (id) => call('POST', `/api/lab/open/${encodeURIComponent(id)}`, {}, 20000),
+  labHub: () => call('GET', '/api/lab/hub', null, 15000),
+  labHost: (id) => call('GET', `/api/lab/host/${encodeURIComponent(id)}`, null, 15000),
+  labHubAction: (type, id, done) => call('POST', '/api/lab/hub/action', { type, id, done }),
+  labLayout: () => call('GET', '/api/lab/layout', null, 20000),
+  saveLabLayout: (items) => call('POST', '/api/lab/layout', { items }),
+  labPage: (id) => call('GET', `/api/lab/page/${encodeURIComponent(id)}`, null, 20000),
   picture: (mode) => call('POST', '/api/picture', { mode }, 20000),   // a picture switch can take several seconds
   appOrder: () => call('GET', '/api/app-order'),
   saveAppOrder: (order, line) => call('POST', '/api/app-order', { order, line }),

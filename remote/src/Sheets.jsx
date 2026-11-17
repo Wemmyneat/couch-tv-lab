@@ -391,9 +391,17 @@ export const MoreSheet = forwardRef(function MoreSheet({ open, onClose, sleepEnd
   const endsAt = sleepEnds ? new Date(sleepEnds) : null;
   const left = endsAt ? Math.max(0, Math.round((endsAt - Date.now()) / 60000)) : 0;
   return (
-    <Sheet ref={setRefs} open={open} onClose={onClose} title={t('tv')} fromTop closeDrag={closeDrag} className="more-sheet">
+    <Sheet ref={setRefs} open={open} onClose={onClose} title={t('tv')} className="more-sheet">
+      <section className="more-block first">
+        <h3><Ic.Keyboard size={16} /> {t('type_on_tv')}</h3>
+        <form className="ask-field glass" onSubmit={(e) => { e.preventDefault(); if (typed.trim()) { tick(); onText(typed.trim()); setTyped(''); } }}>
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t('type_placeholder')} enterKeyHint="send" aria-label="Text to type on the TV" />
+          <button type="submit" className="round solid small" aria-label={t('send_to_tv')} disabled={!typed.trim()}><Ic.Send size={18} /></button>
+        </form>
+        <p className="note">{t('type_note')}</p>
+      </section>
       {tvs?.length > 1 && (
-        <section className="more-block first">
+        <section className="more-block">
           <h3><Ic.Screen size={16} /> {t('which_tv')}</h3>
           <div className="chips-row" role="radiogroup" aria-label={t('which_tv')}>
             {tvs.map((tv) => (
@@ -421,7 +429,7 @@ export const MoreSheet = forwardRef(function MoreSheet({ open, onClose, sleepEnd
         </section>
       )}
 
-      <section className={`more-block ${tvs?.length > 1 ? '' : 'first'}`}>
+      <section className="more-block">
         <h3><Ic.Moon size={16} /> {t('sleep_timer')}</h3>
         <div className="chips-row">
           {SLEEP.map((m) => (
@@ -431,14 +439,6 @@ export const MoreSheet = forwardRef(function MoreSheet({ open, onClose, sleepEnd
         <p className="note">{sleepError || (endsAt ? t('turns_off_at', { time: endsAt.toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' }), n: left }) : t('sleep_note'))}</p>
       </section>
 
-      <section className="more-block">
-        <h3><Ic.Keyboard size={16} /> {t('type_on_tv')}</h3>
-        <form className="ask-field glass" onSubmit={(e) => { e.preventDefault(); if (typed.trim()) { tick(); onText(typed.trim()); setTyped(''); } }}>
-          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t('type_placeholder')} enterKeyHint="send" aria-label="Text to type on the TV" />
-          <button type="submit" className="round solid small" aria-label={t('send_to_tv')} disabled={!typed.trim()}><Ic.Send size={18} /></button>
-        </form>
-        <p className="note">{t('type_note')}</p>
-      </section>
 
       <div className="more-grid">
         <button className="tile glass" onClick={() => { tick(); onKey('captions'); }}><Ic.Captions /> {t('subtitles')}</button>

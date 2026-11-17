@@ -95,6 +95,17 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="false">
 
+        <!-- couch-tv-lab: the DisplayOS wall (WallActivity.kt). Exported so the bridge can start it over ADB
+             ("Show DisplayOS"); it only shows the dashboards the bridge's plan lists. -->
+        <activity
+            android:name=".WallActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Home"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|fontScale|locale" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

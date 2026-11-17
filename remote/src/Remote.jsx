@@ -70,7 +70,7 @@ export function TopBar({ people, tvName, who, setWho, tv, appInfo, reach, sleepL
         <b>{tvName || t('tv')}</b>
         <span>{parts.length ? parts.reduce((acc, p, i) => (i ? [...acc, ' · ', p] : [p]), []) : status}</span>
       </div>
-      <button className="round glass" aria-label={t('more_controls')} onClick={() => { tick(); onMore(); }}><Ic.More /></button>
+      {onMore && <button className="round glass" aria-label={t('more_controls')} onClick={() => { tick(); onMore(); }}><Ic.More /></button>}
       <button className={`round glass power ${tv?.power === 'on' ? 'is-on' : ''}`} aria-label={tv?.power === 'on' ? t('turn_off') : t('turn_on')}
         onClick={() => { tick(); onPower(); }}><Ic.Power /></button>
     </header>
@@ -184,7 +184,7 @@ function zoneAt(r, x, y) {
 const stopTimers = (s) => { if (s) { clearTimeout(s.timer); clearInterval(s.timer); } };
 
 // `offState` is null when the TV can be driven, else 'off' | 'waking' | 'unreachable'.
-export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLivingRoom }) {
+export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLivingRoom, onTouch, step = STEP }) {
   const ref = useRef(null);
   const g = useRef(null);
   const [lit, setLit] = useState(null);
@@ -210,6 +210,7 @@ export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLiv
         s.timer = setInterval(() => { if (g.current === s && !s.moved) send(zone); else clearInterval(s.timer); }, REPEAT_EVERY);
       }, REPEAT_AFTER);
     setSpot({ x: e.clientX - r.left, y: e.clientY - r.top });
+    onTouch?.(true);
   };
   const move = (e) => {
     const s = g.current; if (!s || e.pointerId !== s.id) return;
@@ -219,16 +220,16 @@ export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLiv
     // Once the finger travels, it is a swipe: any hold or repeat stops, so directions never mix.
     if (!s.moved && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10) { s.moved = true; stopTimers(s); }
     if (!s.moved) return;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) >= STEP) {
+    if (Math.max(Math.abs(dx), Math.abs(dy)) >= step) {
       const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
       send(dir); s.steps += 1;
-      s.ax += DIRS[dir][0] * STEP; s.ay += DIRS[dir][1] * STEP;
+      s.ax += DIRS[dir][0] * step; s.ay += DIRS[dir][1] * step;
       if (Math.abs(dx) > Math.abs(dy)) s.ay = e.clientY; else s.ax = e.clientX;
     }
   };
   const up = (e) => {
     const s = g.current; if (!s || e.pointerId !== s.id) return;
-    g.current = null; setSpot(null);
+    g.current = null; setSpot(null); onTouch?.(false);
     stopTimers(s);
     const dx = e.clientX - s.x; const dy = e.clientY - s.y;
     if (s.held && !s.moved) { tick(); return; }
@@ -238,7 +239,7 @@ export function Pad({ onKey, offState, wakeError, onWake, onRetry, tvName, onLiv
     }
     tick();
   };
-  const cancel = (e) => { const s = g.current; if (!s || e.pointerId !== s.id) return; stopTimers(s); g.current = null; setSpot(null); };
+  const cancel = (e) => { const s = g.current; if (!s || e.pointerId !== s.id) return; stopTimers(s); g.current = null; setSpot(null); onTouch?.(false); };
 
   let overlay = <p className="hint">{t('tap_middle')}</p>;
   if (offState === 'unpaired') {
@@ -321,24 +322,64 @@ function useRepeat(fn) {
 export function Controls({ tv, onKey, onVolume }) {
   const v = tv?.volume;
   const st = tv?.playing?.state;
+  return (
+    <div className="controls v2">
+      <button className="round big glass" aria-label={v?.muted ? 'Unmute' : 'Mute'} onClick={() => { tick(); onVolume('mute'); }}>
+        {v?.muted ? <Ic.Muted /> : <Ic.Speaker />}
+      </button>
+      <button className="playbig" aria-label={st === 'playing' ? t('pause') : st === 'paused' ? t('play') : t('play_pause')}
+        onClick={() => { tick(); onKey('play_pause'); }}>
+        {st === 'playing' ? <Ic.Pause size={30} /> : st === 'paused' ? <Ic.Play size={30} /> : <Ic.PlayPause size={30} />}
+      </button>
+      <button className="round big glass" aria-label={t('back')} onClick={() => { tick(); onKey('back'); }}><Ic.Back /></button>
+    </div>
+  );
+}
+
+// couch-tv-lab: the volume wheel beside the pad. Drag up or down: one volume step per WHEEL_STEP points,
+// with a haptic tick each step, sent to the bridge in small batches. + and − at the ends repeat while
+// held. While a finger is on the pad it shrinks to a thin level bar (compact) and gives the pad its room.
+const WHEEL_STEP = 16;
+export function VolumeWheel({ tv, onVolume, compact, output }) {
+  const v = tv?.volume;
+  const level = v?.known ? v.level : null;
+  const g = useRef(null);
+  const [shift, setShift] = useState(0);
+  const pend = useRef({ up: 0, down: 0, t: null });
   const upR = useRepeat(() => onVolume('up'));
   const downR = useRepeat(() => onVolume('down'));
-  return (
-    <div className="controls">
-      <button className="round big glass" aria-label={t('back')} onClick={() => { tick(); onKey('back'); }}><Ic.Back /></button>
-      <button className="round big glass" aria-label={t('home')} onClick={() => { tick(); onKey('home'); }}><Ic.Home /></button>
-      <button className="round big glass" aria-label={st === 'playing' ? t('pause') : st === 'paused' ? t('play') : t('play_pause')}
-        onClick={() => { tick(); onKey('play_pause'); }}>
-        {st === 'playing' ? <Ic.Pause /> : st === 'paused' ? <Ic.Play /> : <Ic.PlayPause />}
-      </button>
-      <div className="volume glass" role="group" aria-label={t('volume')}>
-        <button aria-label="Volume down" {...downR}><Ic.Minus /></button>
-        <button className="vol-mid" aria-label={v?.muted ? 'Unmute' : 'Mute'} onClick={() => { tick(); onVolume('mute'); }}>
-          {v?.muted ? <Ic.Muted size={20} /> : <Ic.Speaker size={20} />}
-          {(v?.muted || v?.known) && <span>{v?.muted ? t('muted') : v.level}</span>}
-        </button>
-        <button aria-label="Volume up" {...upR}><Ic.Plus /></button>
+  const flush = () => {
+    const p = pend.current; p.t = null;
+    if (p.up) { onVolume('up', p.up); p.up = 0; }
+    if (p.down) { onVolume('down', p.down); p.down = 0; }
+  };
+  const queue = (dir) => { pend.current[dir] += 1; tick(); if (!pend.current.t) pend.current.t = setTimeout(flush, 120); };
+  useEffect(() => () => clearTimeout(pend.current.t), []);
+  const down = (e) => { e.currentTarget.setPointerCapture?.(e.pointerId); g.current = { id: e.pointerId, y: e.clientY, acc: 0 }; };
+  const move = (e) => {
+    const s = g.current; if (!s || s.id !== e.pointerId) return;
+    const dy = e.clientY - s.y; s.y = e.clientY; s.acc += dy;
+    setShift((x) => (x + dy) % 12);
+    while (s.acc <= -WHEEL_STEP) { s.acc += WHEEL_STEP; queue('up'); }
+    while (s.acc >= WHEEL_STEP) { s.acc -= WHEEL_STEP; queue('down'); }
+  };
+  const up = () => { g.current = null; };
+  const pct = level == null ? 0 : Math.max(0, Math.min(100, level));
+  if (compact) {
+    return (
+      <div className="vwheel compact" role="meter" aria-label="Volume" aria-valuenow={level ?? undefined} aria-valuemin={0} aria-valuemax={100}>
+        <div className="vbar"><div className="vfill" style={{ height: `${pct}%` }} /></div>
       </div>
+    );
+  }
+  return (
+    <div className="vwheel glass" role="group" aria-label="Volume">
+      <button className="vbtn" aria-label="Volume up" {...upR}><Ic.Plus size={18} /></button>
+      <div className="vridges" style={{ backgroundPositionY: `${shift}px` }} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+        aria-hidden="true" />
+      <b className="vlevel">{v?.muted ? <Ic.Muted size={18} /> : level ?? '–'}</b>
+      {output && <small className="vout">{output}</small>}
+      <button className="vbtn" aria-label="Volume down" {...downR}><Ic.Minus size={18} /></button>
     </div>
   );
 }

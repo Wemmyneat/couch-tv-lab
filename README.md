@@ -1,3 +1,7 @@
+> **This is couch-tv-lab**, a fork of [Seagey/couch-tv](https://github.com/Seagey/couch-tv) that adds homelab and workspace
+> pages, widgets and alerts. The fork's own docs, plan and build journal are in [lab/](lab/README.md). Everything below is the
+> upstream README.
+
 # couch-tv
 
 Your own home screen and phone remote for a Google TV, and now a Samsung TV, and an LG

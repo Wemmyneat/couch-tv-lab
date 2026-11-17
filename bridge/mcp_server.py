@@ -279,5 +279,32 @@ def both_like() -> dict:
     return call("GET", "/api/both", timeout=40)
 
 
+# ---------- couch-tv-lab (bridge/lab.py) ----------
+@mcp.tool()
+def lab_buttons() -> dict:
+    """The custom remote buttons set up in config.json (lab.buttons): id, label and icon of each."""
+    return call("GET", "/api/lab/buttons")
+
+
+@mcp.tool()
+def lab_action(id: str, tv: str | None = None) -> dict:
+    """Run one of the custom remote buttons by id (see lab_buttons), exactly as if it was tapped on the phone."""
+    return call("POST", "/api/lab/action/" + urllib.parse.quote(id, safe=""), {}, tv=tv, timeout=90)
+
+
+@mcp.tool()
+def screenshot_save(tv: str | None = None) -> dict:
+    """Take a screenshot of the TV and save it to the configured places (server folder, Immich album, NAS).
+    Says where it was saved, and notes when the app on screen blocks screenshots."""
+    return call("POST", "/api/screenshot/save", {}, tv=tv, timeout=90)
+
+
+
+@mcp.tool()
+def show_displayos(tv: str | None = None) -> dict:
+    """Put the DisplayOS dashboard wall on the TV, full screen, resuming where it left off. Back on the TV remote leaves it."""
+    return call("POST", "/api/lab/wall/show", {}, tv=tv, timeout=30)
+
+
 if __name__ == "__main__":
     mcp.run()

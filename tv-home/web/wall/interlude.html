@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- couch-tv-lab: the DisplayOS wall's interlude on the TV (WallActivity loads it between slides):
+     ?type=clock | weather | verse. Data from the bridge (/api/lab/wall/interlude); shown over one of
+     couch-tv's own scene photos. Display only. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interlude</title>
+<style>
+@font-face { font-family: Antonio; src: url(../fonts/antonio-latin-300.woff2) format("woff2"); font-weight: 300; }
+@font-face { font-family: Inter; src: url(../fonts/inter-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; }
+html, body { margin: 0; height: 100%; background: #000; color: #fff; font-family: Inter, sans-serif; overflow: hidden; }
+.bg { position: fixed; inset: 0; background: #0b0d10 center / cover no-repeat; opacity: 0; transition: opacity 1.2s; }
+.bg.on { opacity: 1; }
+.shade { position: fixed; inset: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,.15), rgba(0,0,0,.55)); }
+main { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 8vw; box-sizing: border-box; }
+.time { font: 300 30vh/1 Antonio, sans-serif; letter-spacing: -0.02em; text-shadow: 0 1vh 4vh rgba(0,0,0,.35); }
+.date { font-size: 4.2vh; font-weight: 500; opacity: .9; margin-top: 2vh; }
+.big { font-size: 16vh; font-weight: 650; line-height: 1; }
+.sub { font-size: 4vh; opacity: .85; margin-top: 2.5vh; }
+.verse { font-size: 5.2vh; line-height: 1.35; font-weight: 500; max-width: 70vw; }
+.ref { font-size: 3.4vh; opacity: .8; margin-top: 3vh; }
+</style>
+</head>
+<body>
+<div class="bg" id="bg"></div>
+<div class="shade"></div>
+<main id="main"></main>
+<script>
+(function () {
+  var type = (location.search.match(/[?&]type=([a-z]+)/) || [])[1] || "clock";
+  var main = document.getElementById("main");
+  var photos = ["grose-valley", "aresquiers-beach", "albury-storm", "scene-dawn", "scene-fog", "scene-golden"];
+  var bg = document.getElementById("bg"), img = new Image();
+  img.onload = function () { bg.style.backgroundImage = "url(" + img.src + ")"; bg.className = "bg on"; };
+  img.src = "../backgrounds/" + photos[Math.floor(Math.random() * photos.length)] + ".jpg";
+  function esc(v) { return String(v == null ? "" : v).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  var WX = { 0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Cloudy", 45: "Fog", 48: "Fog", 51: "Drizzle", 53: "Drizzle", 55: "Drizzle",
+    61: "Rain", 63: "Rain", 65: "Heavy rain", 80: "Showers", 81: "Showers", 82: "Heavy showers", 95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm" };
+  function clock() {
+    var d = new Date(), h = d.getHours() % 12 || 12;
+    main.innerHTML = '<div class="time">' + h + ":" + pad(d.getMinutes()) + '</div><div class="date">' +
+      esc(d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })) + "</div>";
+  }
+  function load() {
+    var x = new XMLHttpRequest();
+    x.open("GET", "/api/lab/wall/interlude");
+    x.timeout = 8000;
+    x.onload = function () {
+      var j = null; try { j = JSON.parse(x.responseText); } catch (e) {}
+      if (!j || !j.ok) { clock(); return; }
+      if (type === "weather" && j.temp != null) {
+        main.innerHTML = '<div class="big">' + Math.round(j.temp) + '°</div><div class="sub">' + esc(WX[j.code] || "") + (j.place ? " · " + esc(j.place) : "") + "</div>";
+      } else if (type === "verse" && j.verse && j.verse.text) {
+        main.innerHTML = '<div class="verse">' + esc(j.verse.text) + '</div><div class="ref">' + esc(j.verse.ref) + "</div>";
+      } else clock();
+    };
+    x.onerror = x.ontimeout = clock;
+    x.send();
+  }
+  if (type === "clock") { clock(); setInterval(clock, 15000); } else load();
+})();
+</script>
+</body>
+</html>
