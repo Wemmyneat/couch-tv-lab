@@ -106,6 +106,9 @@ class WallActivity : Activity() {
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
         settings.mediaPlaybackRequiresUserGesture = true
+        // Dashboards see a desktop browser: on "Android" Proxmox 9 serves its WebAssembly mobile app (which
+        // stays grey in this WebView) and others pick a phone layout. A wall on a TV wants the desktop pages.
+        settings.userAgentString = desktopAgent(settings.userAgentString)
         isFocusable = true
         webViewClient = object : WebViewClient() {
             // dashboards navigate inside themselves (logins, redirects): stay in this view
@@ -131,6 +134,11 @@ class WallActivity : Activity() {
             }
         }
     }
+
+    private fun desktopAgent(ua: String) = ua
+        .replace(Regex("""\(Linux; Android[^)]*\)"""), "(X11; Linux x86_64)")
+        .replace(" Mobile Safari", " Safari")
+        .replace(Regex("""\s*Version/[0-9.]+"""), "")
 
     private fun fingerprint(der: ByteArray) = MessageDigest.getInstance("SHA-256").digest(der).joinToString("") { "%02X".format(it) }
 
@@ -286,6 +294,14 @@ class WallActivity : Activity() {
             else -> return super.dispatchKeyEvent(event)
         }
         return true
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The home pauses WebView timers while it is covered (upstream "rest while covered"), and
+        // WebView.pauseTimers() is process-wide: it froze this screen's dashboards half-loaded. The home's
+        // onPause runs before this onResume, so resuming here wins; the home resumes them itself on return.
+        interlude.resumeTimers()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
