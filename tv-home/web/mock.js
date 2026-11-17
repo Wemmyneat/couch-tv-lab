@@ -5,26 +5,41 @@
 //
 // Presets for previews, all optional (see docs/CONFIG.md for what each setting means):
 //   people=0..8         that many sample people (default: Person 1 and Person 2)
-//   quick=sleep,look    tvs[].quick, in order (sleep, picture, look, input)
+//   quick=sleep,look    tvs[].quick, in order (sleep, picture, look, soundscape, input)
+//   soundscape=rain     home.soundscape: the sound its button starts with (rain, fire, waves, brown)
 //   picture=1           this TV has a picture mode switch (Calibrated and Dynamic)
-//   look=classic        home.look       clock=24h   home.clock     dock=6   home.dock_size
-//   scenes=fog,dawn     home.scenes     secs=8      home.scene_seconds
+//   look=oled           home.look (night, oled, classic)       clock=24h   home.clock     dock=6   home.dock_size
+//   scenes=fog,dawn     home.scenes     secs=8      home.scene_seconds     sunsync=1   home.sun_sync
+//   sunrotate=25        home.sun_rotate_minutes (own scenes tagged "when")     datebars=1   home.date_bars
 //   myscenes=[...]      home.my_scenes, as JSON (docs/MAKE-A-SCENE.md), for your own scenes
-//   lang=it             home.language (en, es, es-MX, it, de, tr); without it, the browser's own language
+//   lang=it             home.language (en, es, es-MX, it, de, tr, sr-Latn-RS, pl, pt); without it, the browser's own language
 //   glass=on            home.glass (on, lite: no blur)      video=<link>   home.video_url, an MP4 or MOV
 //   moving=off          home.moving_tiles: the focused tile's slow sway (off, or on)
+//   dock=mac            home.dock: the Mac-style dock (mac, or classic)
+//   ambient=1           home.ambient_music: the full screen music view (needs music=1; ambient=off: off)
+//   lighter=1           home.lighter: Lighter home for a slow box (no blur, no soft shadows, a still photo)
 //   icons=glass         home.glass_icons: Apple style clear app icons on glass
 //   amount=1..5         home.glass_amount, how clear the glass is (1 frosted, 3 the default, 5 very clear)
 //   clockstyle=liquid   home.clock_style: the Night clock as liquid glass
 //   unit=f              home.wx_unit: temperatures in Fahrenheit
+//   wxfx=1              home.ambient_weather: rain, snow and fog over the scenes (off unless set)
+//   sungrade=1          home.ambient_sun_grade: the sun's colour over the scenes (off unless set)
+//                       (also ?test_wx=<WMO code, 63 rain, 73 snow, 45 fog, 95 storm> and ?test_alt=<sun height, degrees>)
+//   idle=<seconds|off>   home.idle_photo_seconds: hide the rows after 5, 10, 15, 30 or 60 seconds
+//   smartidle=1          home.smart_idle.enabled: enable Smart Idle (smartidle_sec=5 sets test timeout in seconds)
 //   inputs=4            the Input button lists four HDMI ports (one eARC), as the launcher reads them
 //   gfocus=glass        home.glass_focus: with glass app icons, the focused app stays glass
+//   banners=1           home.dock_banners: the Night dock shows each app's wide TV banner
 //   music=1             Now playing: a pretend song in Spotify (music=paused: paused; music=noart: no cover)
 //   newapp=1            an app turns up that this TV has not seen before (the New dot)
 //   down                the bridge is not answering      offline=1   the saved copy, no bridge at all
 //   reset=1             forget everything this preview saved (orders, people, the look, Home settings)
 //   ha=1                smart home: a pretend Home Assistant with two rooms and three scenes
 //                       (ha=down: it is not answering; ha=scenes: scenes only, no rooms)
+//   kids=1              kids mode: Ruby, a kids profile on the couch, with a shelf of sample shows (all
+//                       animated, so no real faces) and two allowed apps. The parent PIN is 1234.
+//                       kids=empty: the same profile with nothing on the shelf yet
+//   cards=1             custom cards (home.custom_cards): three sample cards at the end of the row
 //   update=1            Home settings, Updates, with a pretend 0.4 waiting (update=latest: none
 //                       newer; update=allow: the TV has not let Home install apps yet;
 //                       update=ask: nobody has answered "tell you about new versions?" yet)
@@ -50,6 +65,7 @@
     });
   }
   if (arg("quick") !== null) cfg.tvs[0].quick = arg("quick").split(",").filter(Boolean);
+  if (arg("banners")) cfg.home.dock_banners = true;
   if (arg("inputs")) {
     window.MOCK_INPUTS = [
       { id: "mock/hdmi1", label: "HDMI 1", type: "hdmi", devices: ["PlayStation 5"] },
@@ -60,20 +76,57 @@
   }
   if (arg("picture")) cfg.tvs[0].picture_modes = ["Calibrated", "Dynamic"];
   if (arg("look")) cfg.home.look = arg("look");
+  if (arg("idle")) cfg.home.idle_photo_seconds = arg("idle") === "off" ? 0 : Number(arg("idle"));
+  if (arg("smartidle")) {
+    cfg.home.smart_idle = { enabled: arg("smartidle") !== "off", home_idle_minutes: 15, home_action: "ambient_clock", paused_idle_minutes: 30, quiet_hours: { enabled: false, start: "23:00", end: "06:00", idle_minutes: 15 } };
+  }
+  if (arg("smartidle_sec")) window.MOCK_SMART_IDLE_MS = Math.max(1000, (parseInt(arg("smartidle_sec"), 10) || 5) * 1000);
+  if (arg("soundscape")) cfg.home.soundscape = arg("soundscape");
   if (arg("clock")) cfg.home.clock = arg("clock");
   if (arg("lang")) cfg.home.language = arg("lang");
   if (arg("dock")) cfg.home.dock_size = parseInt(arg("dock"), 10);
   if (arg("scenes")) cfg.home.scenes = arg("scenes").split(",");
   if (arg("secs")) cfg.home.scene_seconds = parseInt(arg("secs"), 10);
+  if (arg("sunsync")) cfg.home.sun_sync = arg("sunsync") === "1" || arg("sunsync") === "true";
+  if (arg("sunrotate")) cfg.home.sun_rotate_minutes = parseInt(arg("sunrotate"), 10);   // home.sun_rotate_minutes
+  if (arg("datebars")) cfg.home.date_bars = arg("datebars") !== "off";   // home.date_bars
   if (arg("myscenes")) try { cfg.home.my_scenes = JSON.parse(arg("myscenes")); } catch (e) {}
   if (arg("glass")) cfg.home.glass = arg("glass");
   if (arg("moving")) cfg.home.moving_tiles = arg("moving") !== "off";
+  if (arg("dock")) cfg.home.dock = arg("dock");
+  if (arg("lighter")) cfg.home.lighter = arg("lighter") !== "off";
+  if (arg("ambient")) cfg.home.ambient_music = arg("ambient") !== "off";   // the full screen music view (off unless set)
   if (arg("icons") === "glass") cfg.home.glass_icons = true;
   if (arg("gfocus")) cfg.home.glass_focus = arg("gfocus");   // glass: the focused app stays glass (#32)
   if (arg("amount")) cfg.home.glass_amount = parseInt(arg("amount"), 10);
   if (arg("clockstyle")) cfg.home.clock_style = arg("clockstyle");
+  if (arg("wxfx")) cfg.home.ambient_weather = arg("wxfx") !== "off";
+  if (arg("sungrade")) cfg.home.ambient_sun_grade = arg("sungrade") !== "off";
   if (arg("unit")) cfg.home.wx_unit = arg("unit");   // home.wx_unit: c or f (#56)
   if (arg("video")) cfg.home.video_url = arg("video");
+  // ---------- kids mode, for ?kids= (bridge/kids.py makes the same shape; the PIN here is 1234) ----------
+  var KIDS = null;
+  if (arg("kids")) {
+    var jwp = function (path) { return "https://images.justwatch.com/poster/" + path; };
+    var iview = { id: "abc-iview", name: "ABC iview", package: "au.net.abc.iview" };
+    var shelf = arg("kids") === "empty" ? [] : [
+      { id: "bluey", title: "Bluey", service: "abc-iview", app: iview, poster: jwp("185497966/s592/bluey-2018.jpg") },
+      { id: "hey-duggee", title: "Hey Duggee", service: "abc-iview", app: iview, poster: jwp("346323994/s592/hey-duggee.jpg") },
+      { id: "peppa-pig-1-3", title: "Peppa Pig", service: "abc-iview", season: 1, episode: 3, app: iview, poster: jwp("207234640/s592/peppa-pig.jpg") },
+      { id: "octonauts", title: "Octonauts", service: "abc-iview", app: iview, poster: jwp("174932116/s592/the-octonauts.jpg") },
+      { id: "puffin-rock", title: "Puffin Rock", service: "netflix", app: { id: "netflix", name: "Netflix", package: "com.netflix.ninja" }, poster: jwp("177142154/s592/puffin-rock.jpg") },
+      { id: "sarah-duck", title: "Sarah & Duck", poster: jwp("116976329/s592/sarah-and-duck.jpg") }
+    ];
+    KIDS = { id: "ruby", name: "Ruby", colour: "#ff9f0a", shows: shelf, apps: ["au.net.abc.iview", "com.google.android.youtube.tv"],
+      pin_salt: "0a1b2c3d4e5f6a7b8c9d0e1f", pin_rounds: 4000,
+      pin_hash: "79a9e80ea8547f9bfa6fc47647eb62c9d5cd284c1454f717e5d0f4178ad75d72" };
+    cfg.people = (cfg.people || [{ id: "person1", name: "Person 1" }, { id: "person2", name: "Person 2" }]).concat([
+      { id: "ruby", name: "Ruby", colour: "#ff9f0a", kid: true, kids_mode: { shows: shelf, apps: KIDS.apps,
+        pin_hash: KIDS.pin_hash, pin_salt: KIDS.pin_salt, pin_rounds: KIDS.pin_rounds } }]);
+  }
+  // ?cards=1: home.custom_cards with three sample cards (docs/TV-HOME.md, Custom cards); the third has a
+  // javascript: link and a script in its title, which must show as plain text and open nothing
+  if (arg("cards")) cfg.home.custom_cards = true;
   window.COUCH_CONFIG = cfg;
 
   // ---------- the launcher's updater (Updater.kt), for ?update= ----------
@@ -194,7 +247,8 @@
     var x = SONGS[songAt];
     return { title: x[0], artist: x[1], album: null, state: songPlaying ? "playing" : "paused",
              app: { id: "spotify", name: "Spotify", package: "com.spotify.tv.android" },
-             art: arg("music") === "noart" ? null : "backgrounds/" + x[2] + ".jpg" };
+             art: arg("music") === "noart" ? null : "backgrounds/" + x[2] + ".jpg",
+             position: 45, duration: 210 };
   }
   window.MOCK_API = function (method, path, body) {
     var empty = /[?&]empty\b/.test(q), down = /[?&]down\b/.test(q);
@@ -203,6 +257,10 @@
         if (down) return reject(new Error("The computer isn't answering."));
         // Now playing (#31): ?music=1, a song that previous and next step through, play and pause toggle
         if (path.indexOf("/api/music") === 0) return resolve({ ok: true, music: arg("music") ? mockSong() : null });
+        if (path.indexOf("/api/custom-cards") === 0) return resolve({ ok: true, cards: arg("cards") ? [
+          { title: "Solar today", subtitle: "Roof panels", value: "18.4 kWh", app: "com.google.android.youtube.tv" },
+          { title: "Bin night", subtitle: "Put out by 7 pm", value: "Recycling", url: "https://example.com/bins" },
+          { title: "<b>not bold</b><script>alert(1)</script>", value: "Plain text", url: "javascript:alert(1)" }] : [] });
         if (path.indexOf("/api/key") === 0) {
           var k = body && body.key;
           if (k === "play_pause") songPlaying = !songPlaying;
@@ -242,7 +300,17 @@
           return resolve({ ok: true, saved: true, line: o.line, dock_max: 10,
             apps: o.order.map(function (p) { return { package: p, name: p }; }) });
         }
-        if (path.indexOf("/api/who") === 0) return resolve({ ok: true, who: null });
+        if (path.indexOf("/api/who") === 0) {
+          if (method === "POST") store.set("api.who", body.who);
+          return resolve({ ok: true, who: store.get("api.who") || (KIDS ? "ruby" : null) });
+        }
+        if (path.indexOf("/api/kids") === 0) {
+          var named = { "au.net.abc.iview": "ABC iview", "com.google.android.youtube.tv": "YouTube" };
+          return resolve({ ok: true, kids: KIDS ? [{ id: KIDS.id, name: KIDS.name, shows: KIDS.shows, pin_hash: KIDS.pin_hash,
+            pin_salt: KIDS.pin_salt, pin_rounds: KIDS.pin_rounds,
+            apps: KIDS.apps.map(function (p) { return { package: p, name: named[p] }; }) }] : [] });
+        }
+        if (path.indexOf("/api/play") === 0) return resolve({ ok: true, note: body.title + " is playing." });
         if (path.indexOf("/api/settings") === 0) {
           if (method === "POST") store.set("api.settings", { settings: body.settings || {}, updated: new Date().toISOString() });
           var st = store.get("api.settings") || { settings: {}, updated: null };
@@ -258,6 +326,9 @@
           if (method === "POST") picture = body.mode === "toggle" ? (picture === "calibrated" ? "dynamic" : "calibrated") : body.mode;
           return resolve({ ok: true, mode: picture, supported: true, can_set: true,
             modes: [{ id: "calibrated", name: "Calibrated" }, { id: "dynamic", name: "Dynamic" }] });
+        }
+        if (path.indexOf("/api/bluetooth-audio") === 0) {
+          return resolve({ ok: true, supported: true });
         }
         if (path.indexOf("/api/screens/open") === 0) return resolve({ ok: true, note: "" });
         if (path.indexOf("/api/screens") === 0) return resolve({ ok: true, screens: screens });

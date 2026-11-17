@@ -110,3 +110,14 @@ Findings:
   caught a real deploy bug: an unanchored `--exclude dist` had kept the new remote off the server.
 - **Router exporter units:** labelled GB but reads like MB (4,040 "GB" by the 9th); shown as MB/1024. To confirm.
 - **Hub source `beaver` is failing**, which the Infra page shows.
+
+## 2026-11-17: power cut, then the first upstream sync
+- **Power cut:** wemserver, Wi-Fi and the TV went down. Everything came back on its own: the bridge started at
+  boot, and the TV reconnected (remote pairing and ADB) when it was switched on.
+- **Upstream moved fast:** 432 commits in a week. 12 files conflicted. Where upstream had built the same thing, we
+  took theirs: the Home key caught per maker (TCL added to their list), the bridge security model with an optional
+  pairing key (couch-tv#73), and `skip_watch_next`.
+- **Two problems only the TV showed:** upstream's home now pauses WebView timers while covered, and
+  `pauseTimers()` is process-wide, so it froze the DisplayOS wall. And Proxmox served its WebAssembly mobile app
+  to an "Android" browser. Fixed in `0.12-lab.8`: the wall resumes timers and identifies as a desktop browser.
+- How we keep up from now on: `lab/UPSTREAM.md` and `lab/sync-upstream.sh`.

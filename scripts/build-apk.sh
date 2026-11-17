@@ -2,8 +2,9 @@
 # Builds the couch-tv TV apps (release APKs) and prints where they are.
 #   dist/couch-tv-home.apk    the TV home (options A and B), from tv-home/android
 #   dist/couch-tv-ontv.apk    the "lives on the TV" app (option C), from on-tv/android, if present
+#   dist/couch-tv-sync.apk    the two TVs in sync helper (experimental, docs/SYNC.md), from sync/android, if present
 #
-# Needs JDK 21 and the Android SDK with platform 34 and build tools 34 (README, "Building the
+# Needs JDK 21 and the Android SDK with platform 34 and build tools 34 (docs/SETUP.md, "Building the
 # app"). Gradle itself is not needed: the Gradle wrapper (tv-home/android/gradlew) fetches 8.11.1.
 #
 # Usage, from the repo root:
@@ -24,13 +25,13 @@ if [ -z "${ANDROID_HOME:-}" ]; then
     [ -d "$d/platforms" ] && ANDROID_HOME=$d && break
   done
 fi
-[ -n "${ANDROID_HOME:-}" ] || { echo "Set ANDROID_HOME to your Android SDK (README, Building the app)."; exit 1; }
+[ -n "${ANDROID_HOME:-}" ] || { echo "Set ANDROID_HOME to your Android SDK (docs/SETUP.md, Building the app)."; exit 1; }
 [ -d "$ANDROID_HOME/platforms/android-34" ] || { echo "No Android platform 34 in $ANDROID_HOME: sdkmanager \"platforms;android-34\" \"build-tools;34.0.0\""; exit 1; }
 export ANDROID_HOME
 if [ -z "${JAVA_HOME:-}" ] && [ -x /usr/libexec/java_home ]; then
   JAVA_HOME=$(/usr/libexec/java_home -v 21 2>/dev/null || true)
 fi
-[ -n "${JAVA_HOME:-}" ] || { echo "Set JAVA_HOME to a JDK 21 (README, Building the app)."; exit 1; }
+[ -n "${JAVA_HOME:-}" ] || { echo "Set JAVA_HOME to a JDK 21 (docs/SETUP.md, Building the app)."; exit 1; }
 export JAVA_HOME
 
 GW="$ROOT/tv-home/android/gradlew"
@@ -66,6 +67,14 @@ if [ -f "$ROOT/on-tv/android/settings.gradle.kts" ] || [ -f "$ROOT/on-tv/android
     OUT="$OUT
 $ROOT/dist/couch-tv-ontv.apk"
   fi
+fi
+
+if [ -f "$ROOT/sync/android/settings.gradle.kts" ]; then
+  echo "Building the sync helper (two TVs in sync, experimental)"
+  "$GW" -p "$ROOT/sync/android" --no-daemon -q clean assembleRelease
+  cp "$ROOT/sync/android/app/build/outputs/apk/release/app-release.apk" "$ROOT/dist/couch-tv-sync.apk"
+  OUT="$OUT
+$ROOT/dist/couch-tv-sync.apk"
 fi
 
 echo "Built:"

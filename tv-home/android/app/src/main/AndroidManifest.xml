@@ -36,17 +36,35 @@
         <!-- The TV's own homes: the Home button watch looks for them (FireWatch.kt), and the crash
              guard hands the screen to one if couch-tv keeps crashing (CrashGuard.kt). -->
         <package android:name="com.amazon.tv.launcher" />
+        <!-- Fire TV apps with no Leanback tile (like Appstore and Audible, #169, #238) -->
+        <package android:name="com.amazon.venezia" />
+        <package android:name="com.audible.application.firetv" />
         <package android:name="com.google.android.apps.tv.launcherx" />
         <package android:name="com.google.android.tvlauncher" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.HOME" />
         </intent>
+        <!-- The screensaver (#86): Screensaver quick button checks the TV's dream is enabled, and the
+             look settings open the ambient settings. Android 11+ hides these packages otherwise
+             (an onn 4K Pro, Android 14, showed no Screensaver button). -->
+        <intent><action android:name="android.service.dreams.DreamService" /></intent>
+        <intent><action android:name="dreamx.two.panel.SETTINGS" /></intent>
+        <package android:name="com.google.android.apps.tv.dreamx" />
         <!-- The TV's input list, for the Input quick button when there is no bridge. -->
         <intent><action android:name="android.settings.TV_INPUT_SETTINGS" /></intent>
         <intent><action android:name="com.android.tv.action.VIEW_INPUTS" /></intent>
         <intent><action android:name="com.google.android.tv.action.VIEW_INPUTS" /></intent>
         <intent><action android:name="android.media.tv.action.SETUP_INPUTS" /></intent>
+        <!-- Web links (custom cards with a url): Android 11+ hides browser packages otherwise. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
         <!-- The Input menu (#30): the TV's own app that plays an input when asked to view its
              passthrough channel (content://android.media.tv/passthrough/<input>). -->
         <intent>
@@ -157,6 +175,20 @@
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/key_watch" />
+        </service>
+        <!-- TCL only (issue #94, TclPlaceholderInput.kt): an empty TV input that TCL's boot manager
+             counts as a reason to let this app start and bind its services at boot. Off here and
+             switched on at runtime on a TCL, so no other TV lists a new input. -->
+        <service
+            android:name=".TclPlaceholderInput"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Home"
+            android:permission="android.permission.BIND_TV_INPUT">
+            <intent-filter>
+                <action android:name="android.media.tv.TvInputService" />
+            </intent-filter>
+            <meta-data android:name="android.media.tv.input" android:resource="@xml/tcl_placeholder_input" />
         </service>
         <receiver android:name=".FireWatch$Restore" android:exported="true">
             <intent-filter>

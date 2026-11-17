@@ -1,5 +1,6 @@
 # Your own settings and secrets
 config.json
+sync-delays.json
 .env
 *.pem
 *.key
@@ -44,6 +45,20 @@ tv-home/web/backgrounds/mine/*
 
 # Your own app logos for the Samsung home (samsung/build.py)
 samsung/my-logos/
+
+# LG Developer Mode key for the Docker example (examples/docker)
+lg-key/
+vega/src/bridge.json
+
+# Couch TV for Apple TV: your own signing settings (team id, bundle id) and Xcode's per user files
+tvos/Config/Signing.mine.xcconfig
+xcuserdata/
+*.xcuserstate
+*.mobileprovision
+*.provisionprofile
+*.p12
+*.cer
+*.certSigningRequest
 
 # couch-tv-lab: per-TV recon output and debloat backups hold LAN details (SSID, MACs)
 lab/**/out-*/

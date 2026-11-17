@@ -55,14 +55,101 @@ object FireHome {
         get() = isFireTv && App.homeEnabled(App.instance)
 
     /**
-     * Amazon's launcher package also holds Fire OS's Settings screens (`.ui.MainSettingsActivity`
-     * and others), so only its other screens count as Amazon's home.
+     * Amazon's launcher package also holds Fire OS's Settings screens (`.ui.MainSettingsActivity`)
+     * and search screens. Only an actual HOME activity counts, never the whole package.
      */
-    fun isAmazonHome(pkg: String?, cls: String?) = pkg == AMAZON_HOME && cls?.contains("Settings") != true
+    fun isAmazonHome(pkg: String?, cls: String?) = FireHomeWindow.isHome(pkg, cls, homeClasses)
 
     /** The WatchService saw Amazon's home come on screen. */
     fun onAmazonHome() {
+        // Recents is its own Amazon activity (issue #223). The Home screen under it reports itself
+        // for a moment as it opens, which is not a Home press, so a window just after Recents is left alone.
+        if (android.os.SystemClock.elapsedRealtime() - recentsAt < RECENTS_QUIET_MS) {
+            Log.i(TAG, "Amazon home right after Recents: left alone")
+            return
+        }
         if (wanted) jump()
+    }
+    @Volatile private var recentsAt = -RECENTS_QUIET_MS
+    private const val RECENTS_QUIET_MS = 2_500L
+
+    /**
+     * Any other TV (a Haier, a TCL, Google TV, issue #98): the Home key can open the maker's own
+     * home by name and ignore the default home, so a home screen that is not this app coming
+     * forward gets this one put back on top. Only the activities the TV lists as a HOME screen
+     * count (never its Settings or setup screens), only with "Use as home screen" on, and only
+     * while the person has switched the Home watch on in Accessibility (or a computer did).
+     */
+    @Volatile private var homeClasses: Set<String> = emptySet()
+    fun readHomes() {
+        val c = App.instance
+        homeClasses = runCatching {
+            c.packageManager.queryIntentActivities(
+                android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME), 0)
+                .filter { it.activityInfo.packageName != c.packageName }
+                .map { it.activityInfo.name }.toSet()
+        }.getOrDefault(emptySet())
+    }
+    /**
+     * Xiaomi (opt-in, "patchwall_replace" on the setup page): Couch TV takes PatchWall's place.
+     * On Xiaomi's Android TV builds PatchWall (com.mitv.tvhome.atv) is a launcher app, not the HOME:
+     * the TV's partnercustomizer opens it by name from the remote's PatchWall button (KEYCODE_BUTTON_5,
+     * see WatchService.onKeyEvent) and when the screen comes on, so no intent filter can claim it.
+     * With the switch on, PatchWall coming forward (its tile, the button, power-on) opens Couch TV
+     * instead (its own Settings screens are left alone), and at power-on Couch TV opens unless the TV
+     * is going back to an HDMI or TV input. Tested on a Redmi MiTV-AXFR0 (Android 11).
+     */
+    const val PATCHWALL = "com.mitv.tvhome.atv"
+    private const val TV_APP = "com.android.tv"
+    val isXiaomi: Boolean = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+    val replacePatchWall: Boolean get() = isXiaomi && Store.bool("patchwall_replace")
+
+    fun isPatchWall(pkg: String?, cls: String?) =
+        pkg == PATCHWALL && cls != null && cls.startsWith("com.mitv.") && !cls.contains("Settings", ignoreCase = true)
+    /**
+     * PatchWall coming forward. Not in the first moments after the screen came on (or the TV booted): the TV
+     * opens PatchWall itself then, even when it is about to go back to an HDMI or TV input, and opening Couch
+     * TV here would cover the input. onScreenOn decides for that window, after the input has had its say.
+     */
+    fun onPatchWall() {
+        if (!replacePatchWall) return
+        if (wakeAt > 0 && android.os.SystemClock.elapsedRealtime() - wakeAt < WAKE_WINDOW_MS) {
+            Log.i(TAG, "PatchWall during a wake: left to the screen-on check")
+            return
+        }
+        jump(force = true)
+    }
+    @Volatile private var wakeAt = 0L
+    private const val WAKE_WINDOW_MS = 6_000L
+
+    // The last real screen that came forward (the watch sees them all), so power-on needs no extra calls.
+    private val notScreens = setOf("android", "com.android.systemui", "com.google.android.inputmethod.latin")
+    @Volatile private var lastPkg: String? = null
+    @Volatile private var amazonHomeInFront = false
+    private val later = android.os.Handler(android.os.Looper.getMainLooper())
+    fun seen(pkg: String?, cls: String?) {
+        if (pkg == null || pkg in notScreens) return
+        if (pkg == AMAZON_HOME && cls != null && cls.contains("RecentDeepLinkActivity")) {
+            recentsAt = android.os.SystemClock.elapsedRealtime()
+        }
+        lastPkg = pkg
+        amazonHomeInFront = isAmazonHome(pkg, cls)
+    }
+
+    /** Screen on or boot. The 2 s wait lets the TV bring its input back first (1.1 s after screen-on on the MiTV-AXFR0). */
+    fun onScreenOn() {
+        if (!replacePatchWall) return
+        wakeAt = android.os.SystemClock.elapsedRealtime()
+        later.removeCallbacksAndMessages(null)
+        later.postDelayed({
+            if (lastPkg == TV_APP) Log.i(TAG, "screen on: the TV is going back to an input, Couch TV stays back")
+            else App.openHome()
+        }, 2_000)
+    }
+
+    fun onOtherHome(pkg: String?, cls: String?) {
+        if (pkg == null || cls == null || pkg == BuildConfig.APPLICATION_ID) return
+        if (App.homeEnabled(App.instance) && cls in homeClasses) jump(force = true)
     }
 
     /** Cheap to call often: starts the watcher once, only while it is wanted. */
@@ -164,12 +251,57 @@ object FireHome {
         }
     }
 
-    private fun jump() {
-        if (!wanted) return
+    private fun jump(force: Boolean = false) {
+        if (!force && !wanted) return
         val now = System.currentTimeMillis()
-        if (now - lastJump < 1200) return   // one jump per press, not one per event
+        if (now - lastJump < JUMP_GAP_MS) {
+            // One jump per press, not one per event. A second press inside the gap brings Amazon's home
+            // back with no later window event to react to, so look again once the gap is over.
+            recheck.removeCallbacks(again)
+            recheck.postDelayed(again, lastJump + JUMP_GAP_MS - now)
+            return
+        }
         lastJump = now
-        App.openHome()
+        bringForward()
+    }
+    private const val JUMP_GAP_MS = 1200L
+    private const val FRONT_CHECK_MS = 800L   // Android 10: how long to wait before checking the move worked
+    private val recheck = android.os.Handler(android.os.Looper.getMainLooper())
+    private val again = Runnable { if (amazonHomeInFront) { Log.i(TAG, "Amazon's home still in front after the gap"); jump() } }
+
+    /**
+     * Fire TV on Android 9 and older: Android holds an app's activity starts for 5 s after a Home press
+     * (the app-switch delay). Seen on a Fire TV Cube (3rd gen, Fire OS 7.7.1.7): Amazon's home stayed up
+     * for 5 s, and another press in that time buried the held start under Amazon's home for good.
+     * Moving this app's own task to the front is not an activity start and was not held there. Only
+     * when the home is the top of that task (setup shares it). Before the home has ever opened, on
+     * Android 11 and newer (background start limits) and on other TVs below Android 10: a normal start, as before.
+     *
+     * Android 10 (SDK 29), any TV, since issue #202: a Hisense Android TV 10 held the start for about 5 s
+     * after a Home press and the home never came back. Android may quietly refuse the move there, so
+     * [FRONT_CHECK_MS] later we check the home is in front and start it normally if not.
+     */
+    private fun bringForward() {
+        val sdk = android.os.Build.VERSION.SDK_INT
+        if (sdk >= 30 || (sdk < 29 && !isFireTv)) { App.openHome(); return }
+        val task = runCatching {
+            App.instance.getSystemService(android.app.ActivityManager::class.java).appTasks.firstOrNull {
+                it.taskInfo.topActivity?.className == HomeActivity::class.java.name
+            }
+        }.getOrNull()
+        if (task != null && runCatching { task.moveToFront() }.isSuccess) {
+            Log.i(TAG, "Amazon's home came forward: moved the home's task to the front")
+            HomeActivity.home()
+            if (sdk == 29) recheck.postDelayed({
+                if (!HomeActivity.isInFront()) {
+                    Log.i(TAG, "the move to front did not show the home: starting it")
+                    App.openHome()
+                }
+            }, FRONT_CHECK_MS)
+        } else {
+            Log.i(TAG, "Amazon's home came forward: starting the home")
+            App.openHome()
+        }
     }
 
     /** The home the system falls back to for everything that is not the Home key itself. Best-effort. */

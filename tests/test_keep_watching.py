@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ["COUCH_DATA"] = tempfile.mkdtemp(prefix="couchtv-keep-")
 sys.path.insert(0, str(Path(__file__).parents[1] / "bridge"))
@@ -22,12 +22,22 @@ def line(title, tv, who, days_ago=0.0, **extra):
 
 class KeepWatchingTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        for f in (store.HISTORY, store.WHO_FILE):
+        import config
+        self._orig_people = config.PEOPLE
+        self._orig_people_ids = config.PEOPLE_IDS
+        config.PEOPLE = [{"id": "person1", "name": "Person 1"}, {"id": "person2", "name": "Person 2"}]
+        config.PEOPLE_IDS = ["person1", "person2"]
+        for f in (store.HISTORY, store.WHO_FILE, store.HIDDEN):
             if os.path.exists(f):
                 os.remove(f)
         store._cache.clear()
         self.tv = next(iter(server.TVS))
         server._current.set(self.tv)
+
+    def tearDown(self):
+        import config
+        config.PEOPLE = self._orig_people
+        config.PEOPLE_IDS = self._orig_people_ids
 
     def add(self, *items):
         for i in items:
@@ -75,9 +85,21 @@ class KeepWatchingTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(server, "play", new=AsyncMock(return_value={"title": "x"})) as play:
             for c in cards:
                 req = AsyncMock()
+                req.headers = {}
                 with patch.object(server, "body", new=AsyncMock(return_value={"id": c["id"], "who": "person1"})):
                     await server.h_continue_open(req)
                 self.assertEqual(play.await_args.args[0], c["title"])
+
+    async def test_a_removed_card_stays_gone_until_played_again(self):
+        self.add(line("Dark", self.tv, "person1", 3), line("Dark", self.tv, "person1", 2), line("Ozark", self.tv, "person1", 1))
+        dark = next(c for c in server.continue_items("person1") if c["title"] == "Dark")
+        hide_req = AsyncMock()
+        hide_req.headers = {}
+        with patch.object(server, "body", new=AsyncMock(return_value={"id": dark["id"]})):
+            await server.h_continue_hide(hide_req)
+        self.assertEqual(self.titles("person1"), ["Ozark"])   # the older Dark line does not come back
+        self.add(line("Dark", self.tv, "person1", -0.001))   # watched again
+        self.assertEqual(self.titles("person1"), ["Dark", "Ozark"])
 
     def test_who_is_kept_per_tv(self):
         store.save_who("person2", "living-room")
@@ -120,6 +142,64 @@ class KeepWatchingTests(unittest.IsolatedAsyncioTestCase):
         s = server._sessions(out)[0]
         self.assertEqual((s["title"], s["queue_title"], s["state"]), ("PrimeVideo", "Man of Steel", "PLAYING"))
 
+
+    async def test_nuvio_is_read_and_a_year_is_no_show(self):
+        import apps
+        self.assertNotIn(apps.describe_package("com.nuvio.tv")["id"], server.NOT_VIEWING)
+        out = ("12.5 1.0\n    package=com.nuvio.tv\n    active=true\n"
+               "    state=PlaybackState {state=PLAYING(3), position=900000, buffered position=0, speed=1.0, updated=1000}\n"
+               "    metadata: size=3, description=Pluribus, S1:E8 \u2013 Charm Offensive, null\n")
+        s = server._sessions(out)[0]
+        self.assertEqual((s["package"], s["state"]), ("com.nuvio.tv", "PLAYING"))
+        self.assertEqual((s["title"], s["subtitle"]), ("Pluribus", "S1:E8 \u2013 Charm Offensive"))
+        # Nuvio sends a film's year as the subtitle, and "2012" is a film on JustWatch
+        self.assertTrue(server.generic_title("2012"))
+        film = {"title": "2012", "type": "movie", "jw_id": "x", "runtime_min": 158}
+        server.episode_cache.clear()
+        find = AsyncMock(side_effect=lambda q, *a: (film if q == "2012" else None, []))
+        with patch.object(server.finder, "find", find):
+            self.assertEqual(await server.resolve_episode("Some Unlisted Film", "2012", True), {})
+        self.assertNotIn("2012", [c.args[0] for c in find.call_args_list])
+        server.episode_cache.clear()
+        # other apps can send a show named with a number ("1923") as the subtitle: still tried
+        self.assertIn("nuvio", server.YEAR_SUBTITLE_APPS)
+        self.assertNotIn("paramountplus", server.YEAR_SUBTITLE_APPS)
+        find = AsyncMock(return_value=(None, []))
+        with patch.object(server.finder, "find", find):
+            await server.resolve_episode("Nature's Empty Throne", "1923")
+        self.assertIn("1923", [c.args[0] for c in find.call_args_list])
+        server.episode_cache.clear()
+
+    def test_nuvio_link_is_the_show_or_film_page_by_imdb_id(self):
+        import apps
+        nuvio = apps.BY_ID["nuvio"]
+        self.assertEqual(server.title_link(nuvio, {"type": "tv", "imdb": "tt22202452"}), "nuvio://series/tt22202452")
+        self.assertEqual(server.title_link(nuvio, {"type": "movie", "imdb": "tt15239678"}), "nuvio://movie/tt15239678")
+        self.assertIsNone(server.title_link(nuvio, {"type": "tv", "imdb": None}))
+        self.assertIsNone(server.title_link(nuvio, {"type": "tv", "imdb": "tt1'; reboot"}))
+        self.assertIsNone(server.title_link(apps.BY_ID["plex"], {"type": "tv", "imdb": "tt22202452"}))
+
+    async def test_a_nuvio_card_opens_the_show_page(self):
+        import apps
+        nuvio = apps.BY_ID["nuvio"]
+        fake = MagicMock(kind="android", adb_ready=AsyncMock(return_value=True), start_intent=AsyncMock(), wait_for_app=AsyncMock(return_value="com.nuvio.tv"))
+        with patch.object(server, "tv", fake), patch.object(server, "launch_app", AsyncMock(return_value=("com.nuvio.tv", "adb"))) as launch:
+            method, note = await server.search_in_app(nuvio, "Pluribus", {"type": "tv", "imdb": "tt22202452"})
+            self.assertEqual(method, "deeplink")
+            fake.start_intent.assert_awaited_once_with("nuvio://series/tt22202452", "com.nuvio.tv")
+            launch.assert_not_awaited()
+            # no IMDb id: only the app opens, as before
+            fake.start_intent.reset_mock()
+            method, _ = await server.search_in_app(nuvio, "Home Video", {"type": "movie", "imdb": None})
+            self.assertEqual(method, "app")
+            fake.start_intent.assert_not_awaited()
+            launch.assert_awaited_once()
+            # no ADB: the link is never handed to the remote, which would not pin it to Nuvio
+            fake.adb_ready = AsyncMock(return_value=False)
+            fake.start_intent.reset_mock()
+            launch.reset_mock()
+            await server.search_in_app(nuvio, "Pluribus", {"type": "tv", "imdb": "tt22202452"})
+            fake.start_intent.assert_not_awaited()
 
 if __name__ == "__main__":
     unittest.main()

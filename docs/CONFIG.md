@@ -10,8 +10,8 @@ change people, weather, the look or the quick buttons.
 Every key below is optional unless it says otherwise. Leave a key out and you get the default in
 brackets, which is how couch-tv behaved before the key existed. So an older `config.json` with no
 `home` or `quick` keys looks and works exactly as it did, except one thing: with no
-`home.language`, a TV set to Spanish, Italian, German or French now shows the home in that language (and an
-Italian, German or French one with a 24 hour clock), where it used to be English.
+`home.language`, a TV set to Spanish, Italian, German, French, Serbian, Polish, Czech, Brazilian Portuguese, Hebrew, Arabic, Romanian or Simplified Chinese now shows the home in that language
+(and an Italian, German, Turkish, French, Serbian, Polish, Czech, Brazilian Portuguese, Hebrew, Romanian or Simplified Chinese one with a 24 hour clock), where it used to be English.
 
 Most of what the home shows can also be changed on the TV itself, with the gear tile (Home
 settings), and what is chosen there wins on that TV. See
@@ -28,24 +28,26 @@ settings), and what is chosen there wins on that TV. See
 | `ip` (needed) | The TV's address on your Wi-Fi, four numbers with dots. |
 | `host` | Optional: a name for the TV on your network (one ending in `.local`, if your TV has one), tried before `ip`. Leave it out (an empty `""` counts as left out). |
 | `label` | Optional: a longer name for your own notes. Nothing reads it yet. |
-| `adb_port` [5555] | The TV's ADB port. 5555 is what Network debugging and `adb tcpip 5555` use; change it only if your TV keeps a different fixed port open. The scripts in `tv-home/tools/` and `scripts/` read `ADB_PORT` instead. The random Wireless debugging port does not work here: see README step 1. |
+| `adb_port` [5555] | The TV's ADB port. 5555 is what Network debugging and `adb tcpip 5555` use; change it only if your TV keeps a different fixed port open. The scripts in `tv-home/tools/` and `scripts/` read `ADB_PORT` instead. The random Wireless debugging port does not work here (only `tvadb.py` can use it, with `TV_ADB_BINARY`): see [SETUP.md step 1](SETUP.md#step-1-developer-mode-on-the-tv-every-option). |
+| `adb_only` [false] | Fire TV on Fire OS only (a Cube or a stick): `true` when the TV has no Android TV Remote protocol (`scripts/check-tv.py <tv address> --adb` says so: ports 6466 and 6467 closed, Fire OS read). The bridge then drives the TV over ADB alone: keys (`input keyevent`), typing (`input text`, letters, digits and plain punctuation only), links (`am start`), power and the app in front (read every few seconds). There is no code pairing: the TV's "Allow USB debugging?" for the bridge computer is the pairing, `paired` is implied, and `bridge/pair_tv.py <tv id>` only checks ADB. No volume level (the volume keys still work). Current Fire OS blocks apps on the TV from using the TV's own ADB, but not a computer, so this is the way to the full phone remote on a Fire TV. Seen working on a Fire TV Cube (3rd gen, Fire OS 7, Android 9). |
 | `mac` | The TV's network (MAC) address, for turning it on from the phone. |
 | `wake_on_lan` [true] | `false` stops the bridge sending Wake-on-LAN packets to this TV, even with a `mac`. |
 | `paired` | Set by `bridge/pair_tv.py`. Leave it alone. |
 | `keep_disabled` | The keep-off list for this TV (see `bridge/API.md`). |
 | `close_on_off` | Android TVs, option B: apps the bridge force-stops when this TV turns off, for example `["com.disney.disneyplus"]`. For an app that signs you out when it wakes before the TV is back on the Wi-Fi. |
 | `quick` [`["sleep"]`, plus `"picture"` when the TV has a `picture` entry] | The quick buttons on the TV home, in this order. See below. |
+| `inputs` [none: `home.inputs` applies] | This TV's own input tiles, the same items as `home.inputs`. Set it on a TV whose consoles differ from the others; `[]` gives that TV no input tiles. Without it, nothing changes. |
 | `picture` | Only used when `"picture"` is in `quick`. See below. |
-| `kind` [`"android"`] | `"samsung"` for a Samsung TV (Tizen), `"lg"` for an LG TV (webOS). The bridge then uses `bridge/samsung.py` or `bridge/lg.py` instead of ADB and the Android remote. See [SAMSUNG.md](SAMSUNG.md) and [LG.md](LG.md). |
-| `open_on_power_on` [true] | Samsung and LG only: open the couch-tv app whenever the TV is switched on and nothing else is on screen. |
-| `app_id` [`"CouchTVApp.Home"`, LG `"app.couchtv.home"`] | Samsung and LG only: the couch-tv app's id on the TV, if you changed it in `samsung/app/config.xml` or `lg/app/appinfo.json`. |
+| `kind` [`"android"`] | `"samsung"` for a Samsung TV (Tizen), `"lg"` for an LG TV (webOS), `"roku"` for a Roku TV or box, `"vidaa"` for a Hisense VIDAA TV, `"philips"` for a Philips on Titan OS or Saphi, `"vega"` for a Fire TV on Vega OS, `"vizio"` for a VIZIO TV (SmartCast or VIZIO OS), `"panasonic"` for a Panasonic Viera (My Home Screen or older), `"tivo"` for a TiVo OS TV built by Vestel (JVC, Telefunken and others), `"appletv"` for an Apple TV (`ip`, `port`, and optionally `app_id`, the bundle id of couch-tv's tvOS app to open when it wakes, only needed when it does not start with `dev.couchtv.appletv`; `open_on_power_on: false` stops that: see [APPLE-TV.md](APPLE-TV.md)). The bridge then uses `bridge/samsung.py`, `bridge/lg.py`, `bridge/roku.py`, `bridge/vidaa.py`, `bridge/philips.py`, `bridge/vega.py`, `bridge/vizio.py`, `bridge/panasonic.py` or `bridge/tivo.py` instead of ADB and the Android remote. See [SAMSUNG.md](SAMSUNG.md), [LG.md](LG.md), [ROKU.md](ROKU.md), [VIDAA.md](VIDAA.md), [PHILIPS-TITAN.md](PHILIPS-TITAN.md), [PHILIPS-SAPHI.md](PHILIPS-SAPHI.md), [FIRE-VEGA.md](FIRE-VEGA.md), [VIZIO.md](VIZIO.md), [PANASONIC.md](PANASONIC.md) and [TIVO.md](TIVO.md). VIDAA has its own keys (`trace`, `browser`, `home_url`, `tile_id`, `keep_home`, `pointer`, `cert`, `cert_key`, `tls`, `mqtt_user`, `mqtt_password`, `client_id`), described in [VIDAA.md](VIDAA.md), step 3. Philips on Titan OS has `home_app`, `home_keys`, `api_version`, `tls`, `pair_secret_file` and `trace` ([PHILIPS-TITAN.md](PHILIPS-TITAN.md)); an older Philips with Saphi is `"philips"` with `"saphi": true`, and its keys (`saphi`, `browser_home`, `home_url`) are in [PHILIPS-SAPHI.md](PHILIPS-SAPHI.md). VIZIO has `trace` and `device_id`, described in [VIZIO.md](VIZIO.md), step 2. Panasonic has `trace`, `home_url`, `settle` and `encrypted`, described in [PANASONIC.md](PANASONIC.md), step 3. TiVo OS has `trace`, `home_url`, `settle`, `browser_wait`, `key_gap`, `browser_path` and `dial_apps`, described in [TIVO.md](TIVO.md), step 3. |
+| `open_on_power_on` [true] | Samsung, LG, Roku, VIDAA, Philips, Panasonic, TiVo OS and Apple TV only: open the couch-tv app whenever the TV is switched on and nothing else is on screen (on a Philips, only when it has a `home_app`, or lists a browser: [PHILIPS-SAPHI.md](PHILIPS-SAPHI.md); Panasonic and TiVo OS cannot tell what is on screen: they open a few seconds after power on). |
+| `app_id` [`"CouchTVApp.Home"`, LG `"app.couchtv.home"`, Roku `"dev"`] | Samsung, LG and Roku only: the couch-tv app's id on the TV, if you changed it in `samsung/app/config.xml` or `lg/app/appinfo.json`. On a Roku a sideloaded channel is always `dev`. |
 | `remote_name` [`client_name`] | Samsung only: the name the TV shows when it asks to Allow the remote. |
-| `extend_devmode` [true] | LG only: press Developer Mode's Extend once a day while the TV is on, so the app is not removed. |
-| `leave_inputs` [false] | LG only: an HDMI or external input counts as in use (a computer or a console on it). The TV coming on there is left alone, and the daily Extend never switches away from it. |
+| `extend_devmode` [true] | LG only: press Developer Mode's Extend once a day while the TV is on, so the app is not removed. With no bridge, the couch-tv app asks once a week with a question on screen that stays until it is answered, and the `extend` quick button does it on demand. |
+| `leave_inputs` [false] | LG, Roku, VIDAA and Philips only: an HDMI or external input counts as in use (a computer or a console on it). The TV coming on there is left alone, and the daily Extend never switches away from it. |
 | `back_to_couch` [false] | LG only: when an app closes to LG's home (Back out of Netflix, say), couch-tv opens again a second later. Home pressed while couch-tv is open still reaches LG's home. |
 | `ares_device` [the TV's `id`] | LG only: this TV's name in LG's ares tools (`ares-setup-device`). |
 | `ares_launch` [found on the PATH] | LG only: the full path to `ares-launch`, for a bridge that cannot find it (started by launchd, for example). |
-| `port` [3000, then 3001] | LG only: the network remote's port, if your TV only answers on one of them. |
+| `port` [LG 3000, then 3001; Roku 8060; VIDAA 36669, then 36668; VIZIO 7345, then 9000; Panasonic 55000; TiVo OS 56789] | LG, Roku, VIDAA, VIZIO, Panasonic and TiVo OS only: the network remote's port, if your TV only answers on one of them (a Roku's is 8060 unless something else changed it). |
 
 ### Quick buttons (`quick`)
 
@@ -53,20 +55,22 @@ The round buttons at the top right of the home. Any of these, in the order you l
 
 | Name | What it does | Needs |
 |---|---|---|
-| `sleep` | Sleep timer: 15, 30, 60 or 90 minutes, then the TV turns off. | The bridge |
+| `sleep` | Sleep timer: 15, 30, 60 or 90 minutes, then the TV turns off. With `bedtime_dim` on, the couch-tv home dims into a warm bedtime amber during the final 15 minutes. With no bridge, the TV launcher app keeps the timer and opens the screensaver at the end. | The bridge or the TV launcher app |
 | `picture` | Flips between the TV's two picture modes in `picture.modes`. | The bridge, ADB, and a `picture` entry |
-| `look` | Flips the home between the Night scenes and the Classic look. This TV remembers the choice. | Nothing |
+| `look` | Cycles the home through the Night scenes, OLED (the Classic grid on pure black) and the Classic look. This TV remembers the choice. | Nothing |
+| `soundscape` | Ambient sleep sounds: each press goes Gentle rain, Fireplace, Ocean waves, Brown noise, off. Made on the TV itself with Web Audio, so there are no sound files and nothing to download. It plays only after someone presses it, stops when an app or the screensaver comes in front, fades over the last 15 minutes of a sleep timer and stops when the timer runs out. Not in the default buttons. | Nothing |
+| `headphones` | Opens the TV's own Bluetooth settings screen, where headphones are paired and picked. Nothing is read from the request and no device addresses leave the bridge. Not in the default buttons. | The bridge and ADB, or the TV home launcher or on-TV app |
+| `screen_off` | Audio-only / Screen off mode: turns off the display (pitch black canvas for OLEDs and drops hardware backlight on Android TV) while sleep soundscapes, Spotify, and sleep timers keep playing in the dark. Pressing any button on the remote wakes the screen and is absorbed so no unwanted actions occur. | Nothing |
 | `input` | couch-tv's own Input menu: the HDMI ports and other inputs Android lists for the TV, by the TV's own names (ARC or eARC shows where the TV's label says so; Android has no public way to read it), with the devices HDMI-CEC found behind each, then Bluetooth and Network. OK switches straight to that input. A TV that lists no inputs keeps today's behaviour: with the bridge it presses the TV's Input key (`KEYCODE_TV_INPUT`); with no bridge the launcher opens the TV's own input screen if it has one. | The TV home launcher, the bridge, or a TV with an input screen |
-| `screensaver` | Starts the TV's own screensaver: Google TV's Ambient mode, with the Google Photos
-albums. Android only lets the system start a dream, so the button cuts the screen timeout to a few
-seconds and nudges the idle timer until the TV naps by itself; the photos then come up a few seconds
-later and the timeout goes back to what it was the moment the screensaver covers the home. A second
-press can never leave the TV on the short timeout. | The TV home app on an Android TV or Google TV,
-and the "modify system settings" app-op that `apply.sh` grants |
+| `bluetooth` | Opens the TV's own Bluetooth settings (speakers, headphones and controllers). Not in the default buttons. | The on-TV app (option C) |
+| `network` | Opens the TV's own network settings (Wi-Fi and the network). Not in the default buttons. | The on-TV app (option C) |
+| `tvsettings` | Opens the TV's own Settings on its main menu (the same as Home settings, TV settings). Not in the default buttons. | The TV home launcher, or the bridge |
+| `screensaver` | Starts the TV's own screensaver: Google TV's Ambient mode, with the Google Photos albums. Android only lets the system start a dream, so the button cuts the screen timeout to a few seconds and nudges the idle timer until the TV naps by itself; the photos then come up a few seconds later and the timeout goes back to what it was the moment the screensaver covers the home. A second press can never leave the TV on the short timeout. | The TV home app on an Android TV or Google TV, and the "modify system settings" app-op that `apply.sh` grants |
+| `extend` | LG only: presses Developer Mode's **Extend**, so LG does not remove couch-tv when the Developer Mode session runs out. The home also asks once a week whether to do it (see `extend_devmode`). It opens LG's Developer Mode app, which sends the Extend; press Home to come back to the home. | The couch-tv app on an LG TV |
 
 A button that cannot work right now is left out, the same way the sleep timer always disappeared
 when the computer was off. With no bridge at all (option A), only `look` shows, plus `input` on
-TVs that have an input screen the launcher can open.
+TVs that have an input screen the launcher can open, and `extend` on an LG TV.
 
 ```json
 "quick": ["sleep", "look", "input", "screensaver"]
@@ -132,6 +136,14 @@ out the same way. The phone's People sheet keeps these marks when it renames or 
   that gives Android no title (Netflix on some TVs) or only its own name (Prime on a Sony) is named
   from its row in Android's "Continue watching" (Watch Next) instead: the TV home app reads those
   rows and hands them to the bridge, because ADB cannot read them. Videos and music are never kept.
+- **With no computer (option A),** Keep watching is Android's own Watch Next list, plus the
+  Continue Watching channel of apps that put nothing in Watch Next but keep a home screen row of
+  their own instead: so far Stremio. Both are read the same read only way, with no account and no
+  sign in. A channel card has no time of its own, so couch-tv notes when it first sees each card as
+  it is now (its episode and how far in): what you just watched comes first. OK opens the app's own
+  link for it (Stremio picks up the episode). `skip_watch_next` and `watch_next_per_app` apply to
+  them too.
+- **Dismissing a show:** hold OK on any card in Keep watching to open the menu and choose **Remove from Keep watching**. The card animates away and is hidden on that TV across restarts. It only hides the card in couch-tv: the app's own Continue watching row is not changed, and a show hidden here still shows on the TV's own home.
 - **Two:** the pill switch at the top left.
 - **Three or more:** a round head icon with the person's initial. OK opens the list.
 - With two or more people the switcher always shows, also before anyone has watched anything, so
@@ -147,6 +159,96 @@ With no bridge (option A) there is no phone to edit people, but Home settings on
 People) adds, renames, removes and reorders them, and the TV keeps the list itself. With a bridge,
 Home settings saves to the same `bridge/data/people.json` the phone uses.
 
+## Kids mode
+
+New, on main, in the next release. Idea from Natalie Bruss (@nataliebruss on Instagram).
+
+Optional, and off unless you set it up: a person with no `kids_mode` key is not a kids profile, and a
+`config.json` with no `kids_mode` anywhere works exactly as before. Nothing makes a kids profile or a
+PIN by itself; only `config.json`, the phone remote (TV, Kids mode) or the on-TV app's setup page do,
+and only when you ask them to.
+
+A person with `kids_mode` is a kids profile. While they are the one watching, the TV home is one
+shelf of big posters, only the shows you put on it, and OK opens each one straight into its show in
+its app. Under the shelf sit the apps you allow (up to six), if any. Nothing else: no other apps, no
+More apps, no Settings tile, no app store, no Keep watching (theirs or anyone else's), no music
+screen, no update questions. The phone remote's Ask is off while that profile is chosen.
+
+```json
+"people": [
+  { "id": "mum", "name": "Mum" },
+  { "id": "ruby", "name": "Ruby", "kid": true,
+    "kids_mode": {
+      "pin": "2580",
+      "shows": [
+        "Bluey",
+        { "title": "Hey Duggee", "service": "abc-iview" },
+        { "title": "Peppa Pig", "service": "abc-iview", "season": 1, "episode": 3 }
+      ],
+      "apps": ["abc-iview", "youtube"]
+    } }
+]
+```
+
+| Key | What it does |
+|---|---|
+| `pin` (needed) | The parent PIN, 4 to 8 digits. Without a good one kids mode stays off for that person (the bridge says so once in its log). |
+| `shows` [none] | Up to 24. A plain title, or `title` with any of `service` (the app it opens in: an id from `bridge/apps.py`, such as `netflix`, `abc-iview`, `disney-plus`, `stan`, `prime-video`), `season` and `episode`. Without `service` the first free or subscription app it streams on is used, never a rent or buy page. Without `season` it opens the show's own page in the app; with one, that episode (or the season's first). |
+| `apps` [none] | Up to six apps shown under the shelf: app ids from `bridge/apps.py` or Android package names. Only apps installed on that TV show. Android's Settings is never allowed. |
+
+The poster on each tile comes from JustWatch, the same place Keep watching gets its pictures. `kid`
+is separate and optional: it keeps someone out of the household's taste, as before.
+
+**Going in and out.** Choosing the kids profile on the TV (or from the phone) goes straight into kids
+mode, no PIN needed. It stays on through Home, Back and a restart. **Grown ups** at the top right, the
+remote's Settings button or Menu button, or any number key opens the parent PIN: a number pad worked
+with the arrows and OK, or the remote's number keys. Typed digits show only as dots. The right PIN moves
+the TV to the first person who is not a kids profile (with no such person, it stays on the child's
+profile with kids mode off until someone else is chosen). Five wrong PINs in a minute and the pad waits
+a minute. With a bridge, it also checks the PIN before it lets the phone or the TV move away from a
+kids profile.
+
+**From the phone remote (options B and C).** TV, **Kids mode**: pick the person, type the PIN once,
+then search for a show and tap the app to add it, remove one with the cross, pick the allowed apps,
+change the PIN, or switch kids mode off. Someone who is not a kids profile yet can be made one there
+with a new PIN, which is how option C (no `config.json`) sets it up. The TV shows a change the next
+time Home is pressed. The PIN is never saved on the phone.
+
+**Where it is kept.** The bridge keeps changes made from the phone in `bridge/data/kids.json`, and
+that wins over `config.json` for that person from then on, like `people.json` does. A PIN typed into
+`config.json` is turned into a salted hash before anything leaves the computer: the TV page,
+`/tv/config.js`, `/api/config` and `/api/kids` carry only the hash, never the PIN. To start again from
+`config.json`, delete `bridge/data/kids.json` and restart the bridge. The on-TV app (option C) keeps
+the same thing in its own storage on the TV.
+
+**With no computer (option A).** `apply.sh` (through `tv-home/tools/home-config.py`) looks each show
+up on JustWatch from your computer while it installs, and hands the TV the link that opens it and its
+poster, because the TV has no bridge to ask later. Run `apply.sh` again after you change the shelf. A
+show it could not find still gets a tile; it opens its app instead of the show. The PIN and the
+shelf come from `config.json` only, as there is no phone remote. A TV home app older than this
+release opens the app rather than the show.
+
+**What it cannot do, said plainly:**
+
+- **Once a show is open, your child is inside that app** (Netflix, iview, Disney+ and the rest) and
+  can browse anything the app offers. couch-tv cannot see or limit what happens inside another app.
+  Pair kids mode with the app's own kids profile and limits: Netflix's Kids profile, maturity rating
+  and title blocking (Profile and Parental Controls, on the Netflix website), Disney+ Junior mode,
+  Prime Video's kids profile, YouTube Kids. With a bridge, list the app's kids profile name in that
+  person's `app_profiles` and the bridge picks it on the "Who's watching?" screen (People, above).
+- **The TV's own buttons.** On some TVs the remote's Home button, or a long press of it, can reach the
+  TV's own home or quick settings. On Android TV and Google TV the Home button watch (set up by
+  `apply.sh`) brings couch-tv back, and with it kids mode. Samsung, LG, Roku and the Beta paths keep
+  their maker's own Home button, so there a child can leave couch-tv that way.
+- **The phone remote is a grown up's tool.** It can still open any app or play any show. Keep it, and
+  the pairing key if you set one, away from the kids.
+- **The PIN is a lock for a child with a remote, not a password.** A four digit PIN behind a hash can
+  be worked out by someone with a computer on your Wi-Fi in seconds. A longer PIN helps a little.
+- The Roku channel draws its own home and does not have kids mode yet. The Apple TV app (Couch TV) has it,
+  with the bridge: see [APPLE-TV.md](APPLE-TV.md#kids-mode), which also covers Apple's Restrictions, because the
+  Apple TV's own TV button still opens Apple's home. The Samsung and LG apps, and the pages the Beta paths open,
+  are the same home page and have it too.
+
 ## The home's look (`home`)
 
 ```json
@@ -154,6 +256,7 @@ Home settings saves to the same `bridge/data/people.json` the phone uses.
   "look": "night",
   "scenes": ["night", "golden", "water", "fog", "dawn"],
   "scene_seconds": 20,
+  "idle_photo_seconds": 0,
   "clock": "12h",
   "dock_size": 10,
   "hide_packages": [],
@@ -163,25 +266,46 @@ Home settings saves to the same `bridge/data/people.json` the phone uses.
 
 | Key | What it does |
 |---|---|
-| `look` ["night"] | `night`: the scenes with the big glass clock. `classic`: one photo, a grid of app banners. The `look` quick button overrides this on each TV, and `?theme=` overrides both for a preview. |
+| `look` ["night"] | `night`: the scenes with the big glass clock. `oled`: the Classic grid of app banners on pure black (no photo, no video, no scenes), with a glowing focus ring and a one or two pixel nudge of the home once a minute against burn-in. Night and Classic are unchanged, and nothing goes black unless this is chosen. `classic`: your photos (or five built in) behind a grid of app banners, changing every 90 seconds unless `keep_photo` is on. The `look` quick button cycles Night, OLED and Classic on each TV, and `?theme=` overrides them for a preview. |
 | `scenes` [all five] | Which Night scenes take turns, and in what order. Any of `night`, `golden`, `water`, `fog`, `dawn`, and the ids of your own scenes. One scene stays put. |
-| `my_scenes` [none] | Your own scenes from any photo, each with its clock designed: where it sits, its size and font, the date above or below it, light or dark text, and `cutout` for the skyline in front of the clock. Made with `tv-home/tools/make-scene.py`; [MAKE-A-SCENE.md](MAKE-A-SCENE.md) has every key. They take turns after the scenes in `scenes` unless they are listed there. Option A needs the app rebuilt with the scene's pictures inside (that guide says how). |
+| `my_scenes` [none] | Your own scenes from any photo, each with its clock designed: where it sits, its size and font, the date above or below it, light or dark text, `cutout` for the skyline in front of the clock, and `video` for a looping clip behind it. Made with `tv-home/tools/make-scene.py`; [MAKE-A-SCENE.md](MAKE-A-SCENE.md) has every key. They take turns after the scenes in `scenes` unless they are listed there. Option A needs the app rebuilt with the scene's pictures inside (that guide says how). |
 | `scene_seconds` [20] | How long each scene shows. 5 or more. |
-| `clock` [the language's usual clock: `24h` in Italian and German, `12h` in the others] | `12h` (5:30 pm) or `24h` (17:30). |
+| `clock` [the language's usual clock: `24h` in Italian, German, Turkish, French, Serbian, Polish, Czech, Brazilian Portuguese, Dutch, Romanian and Simplified Chinese, `12h` in the others] | `12h` (5:30 pm) or `24h` (17:30). |
+| `idle_photo_seconds` [`0`] | `0` leaves rows on. `5`, `10`, `15`, `30` or `60` fades out the app dock, Keep watching and profile controls after that many seconds without input. The clock, weather and background scenes stay visible. Any remote button wakes the rows without opening the focused app. Home settings, Look, Hide rows when idle wins over it. |
+| `keep_photo` [`false`] | Classic look only. `true` stops the background changing and holds one photo, the one showing when it was switched on. In Home settings, Look, Keep one photo you can then pick which photo it holds, and the TV remembers it after a restart (if that photo is later removed it goes back to the usual photo for the time of day). Night and OLED are unaffected. Home settings wins over it. |
 | `hide_packages` [none] | Android package names never shown on the home or in More apps, for a maker's own clutter (help apps, file browsers, screen sharing tools). `survey-tv.py` lists every TV app with its package name. For example `["com.example.tvhelp"]`. |
 | `updates` [none: the TV asks once] | The answer to "tell you when a new couch-tv version is out?", asked at setup: `notify` (the TV home looks on GitHub once a week and puts a dot on the gear tile) or `manual` (nothing by itself; Home settings, Updates, Check for updates now). Used only until the TV has an answer; after that the switch in Home settings, Updates wins. Option C has no updates. |
 | `glass` [`off`] | Glass panels behind the clock, Keep watching and the apps: `on` (clear, softly blurred, with a light edge), `lite` (the same panels with no blur, for older or slower TVs) or `off`. Home settings, Look, Glass panels wins over it. |
 | `glass_icons` [`false`] | `true`: Apple style clear app icons. Each app's symbol is cut from its own background and drawn in light glass on a glass tile, and the app you are on shows its own colours. An icon that will not cut cleanly (a photo) is shown grey and half see-through instead. Works with `glass` on or off, and the phone remote's app grid follows it. Home settings, Look, Glass app icons wins over it. |
 | `moving_tiles` [`true`, or `false` when `glass` is `lite`] | The focused tile's slow sway and the light that slides across it. `false` holds it still, which stops the black box that flickers around the focused tile on some slow TVs (a TCL with a weak GPU). Home settings, Look, Moving tiles wins over it, and a TV set to reduce motion (Developer options, Animator duration scale) already holds it still. |
+| `dock` [`classic`] | The Night look's dock. `mac` makes it a Mac-style dock: the focused app and its neighbours grow in a wave (the focused one 1.55 times, then 1.45, 1.25 and 1.05), all standing on one line, the dock stays centred and its tray grows with them, and the app's name shows in a small bubble above it instead of a white ring. OK presses the icon in and it hops as the app opens. A dock too wide for the screen shrinks as a whole. Home settings, Look, Mac-style dock wins over it; Lighter home holds it off. |
+| `lighter` [`false`; `true` on an old or low end TV] | For a slow box (a Xiaomi Mi Box, a Fire stick) where moving along the rows stutters. `true` turns off every blur, the soft shadows under tiles and panels, the slow drift of the photo and the focused tile's sway, and asks for smaller Keep watching pictures. The layout and colours stay. Home settings, Look, Lighter home wins over it. On a TV whose WebView is too old for CSS grid (Android 6 and older, for example a Mi TV 4A with 1 GB of memory) it starts **on** until someone chooses otherwise, in Home settings or by writing `"lighter": false` here. When it is not set (here or in Home settings), the TV also checks itself: 1 GB of memory or less (`navigator.deviceMemory`) turns it on, 4 GB or more leaves it off, and in between (or when the WebView does not say) it measures its frame time for 1.5 s with something moving, a few seconds after the home opens, and keeps the answer for a week. On a 2 GB Android 11 TV the blur held the home to 22 frames a second whenever a tile was focused. Other TVs start with it off. On every TV the focused tile's sway and glint hold still 6 s after the focus last moved, so a home left alone draws nothing. |
+| `hi_res` [`true`] | `"always"` uses the 3840x2160 copies even when the TV draws its interface at 1080 (a 4K panel set to a 1080 interface, where the scenes looked soft). On a TCL 75C6K with 2.4 GB that cost about 65 MB more for the home's WebView (145 MB to 209 MB), with no stutter (#191). `false` keeps the 1080 copies of the built-in pictures on a 4K screen. A 4K TV normally gets the 3840x2160 copies, which a weak chip can struggle to decode and keep in memory (an LG 43SQ700S monitor). On an LG, `lg/build.py` then leaves the 4K copies out of the app too (22 MB down to under 6 MB). |
 | `glass_amount` [`3`] | How clear the glass is, `1` (frosted) to `5` (very clear): the glass panels, the glass app icons and both clocks (the frosted clock only gets more see-through at `4` and `5`). Home settings, Look, How clear wins over it, and the phone remote follows it. |
 | `glass_focus` [`colour`] | With glass app icons: the focused app shows its own colours (`colour`) or stays glass like the rest (`glass`), shown by its lift, a brighter rim and a deeper shadow. Home settings, Look, Focused app wins over it, and the phone remote follows it. |
-| `now_playing` [`true`] | Now playing: a card with the song any music app is playing, and previous, play or pause and next. `false` hides it. Needs option B or C. Home settings, Look, Now playing wins over it. |
+| `now_playing` [`true`] | Now playing: a card with the song any music app is playing, and previous, play or pause and next. `false` hides it. Needs option B or C. Home settings, Look, Now playing wins over it. Optional: with `SPOTIFY_CLIENT_ID` in `.env` and one login at `http://127.0.0.1:5400/api/spotify/login`, a song playing on the Spotify account anywhere (a phone, or a TV with no ADB) fills the card when the TV shows none, without the media buttons ([VIDAA.md](VIDAA.md), "Spotify"). The standalone home gets it from its own site, with a Play on TV button. |
+| `ambient_music` [`false`] | Music screen: a full screen album cover with a colour glow, a progress bar and previous, play or pause and next, which opens when a new song starts while you are on the home. Down or Back goes back to the apps. Off by default. Needs Now playing (option B or C). On the Lighter home setting (or an old WebView) the glow is a plain colour wash with no blur or animation. Home settings, Look, Ambient music screen wins over it. |
 | `nav_sound` [`system`] | The sound on every arrow and OK: `system` (the TV's own, which follows its system sounds switch), `soft` (a short, quiet tap) or `off`. Home settings, Look, Sound wins over it. |
 | `clock_style` [`frosted`] | The Night look's clock: `frosted` (the photo's frosted copy, as before) or `liquid` (clear glass digits that bend the photo behind them a little, with a bright rim and a soft edge). Home settings, Look, Clock style wins over it. |
 | `wx_unit` [`c`] | The weather's temperature unit: `c` (Celsius) or `f` (Fahrenheit). Home settings, Weather, Units wins over it. |
 | `video_url` [none] | A looping, muted video background in place of the photo, in both looks: the address of an MP4 or MOV (`https://...`, or `http://` for a computer at home). Given here it is on; Home settings, Look switches it off or changes the link. The photo stays if the clip does not play. |
+| `sun_sync` [`false`] | Follow the sun. `true` picks the Night look's scene from the sun's height at `weather.lat` and `weather.lon`: Dawn in the morning twilight, Waterline in the day (Fog when the weather is overcast or rainy), Golden hour in the evening and Night after dark, instead of rotating every `scene_seconds`. A scene you switched off is skipped. With no place set it goes by the clock. Home settings, Look, Scenes, Follow the sun wins over it (ekagra-codes, #57). |
+| `sun_rotate_minutes` [`25`] | With `sun_sync` on and own scenes tagged with `when` (see [MAKE-A-SCENE.md](MAKE-A-SCENE.md)), how long each scene of the current time of day stays before the next one in that group takes its turn, 5 to 240. Without any tagged scene nothing changes. |
+| `date_bars` [`false`] | `true` puts a thin vertical bar between the day, the place and the weather on the Night look's date line, in place of the dots (`Monday 16 November │ Sydney │ 17° Cloudy`). Off, the line is exactly as before. |
+| `ambient_weather` [`false`] | Soft rain, snow, fog and thunderstorm effects drawn over the Night look's scenes when Open-Meteo reports that weather for your place. Off unless you switch it on. It also needs Weather on, stops while an app or Settings is open, and never runs under Lighter home or on an old WebView. Home settings, Weather, Ambient weather effects wins over it (ekagra-codes, #88). |
+| `ambient_sun_grade` [`false`] | A gentle tint over the Night look's scenes that follows the sun's height at `weather.lat` and `weather.lon` (cool at night, rose at sunrise and sunset, amber in the golden hour). Off unless you switch it on, and never under Lighter home or on an old WebView. Home settings, Weather, Sunlight colour grading wins over it. |
 | `dock_size` [10] | How many apps sit in the Night dock before Settings and More apps. 1 to 10. Everything else is behind More apps. The phone's Arrange apps keeps to the same number. |
-| `language` [the TV's own language if the home speaks it, else `en`] | The TV home's language until someone picks one in Home settings: `en` (English), `es` (Spanish), `es-MX` (Mexican Spanish), `it` (Italian), `de` (German), `tr` (Turkish) or `fr` (French). The phone remote has its own choice, "Same as the TV" by default. |
+| `dock_banners` [`false`] | `true`: the Night dock shows each app's wide TV banner (16:9, as tall as the icon) instead of its square icon, like a streaming box's home. The dock shows one row of six; the apps after them, then Settings and More apps, wait in rows below the screen and slide up one row at a time as you press down (Keep watching fades out meanwhile, and comes back on the way up). More apps lists six to a row. Nothing else changes: the scenes, clock and Keep watching stay as they are. An app with no banner of its own gets the one the launcher draws. |
+| `inputs` [none] | Pinned external inputs/consoles displayed as dock and grid tiles. They take dock places, so the last apps move behind More apps. Each item can specify `port` (e.g. `1` for HDMI 1), `label` or `name` (e.g. `"PS5"`), `icon` (`"ps5"`, `"xbox"`, `"switch"`, `"hdmi"`, `"cable"`, or `"pc"`), `match` (substring matched against TV input labels or IDs), or `id`. Optional `image`: a picture for the tile, a file inside the app such as `"backgrounds/mine/console.svg"` (SVG, PNG, JPEG or WebP; no web addresses), shown in place of the drawn icon, which comes back if the picture does not load. On an LG the tile switches straight to that HDMI input (`com.webos.app.hdmi<N>`). For example: `[{"port": 1, "label": "PlayStation 5", "icon": "ps5"}]`. A TV can have its own list instead, `tvs[].inputs` (below). |
+| `soundscape` [none] | The sound the Soundscape button starts with: `"rain"`, `"fire"`, `"waves"`, `"brown"`, or `"off"`, or an object `{"type": "rain", "volume": 0.5, "fade_with_sleep": true}` (`volume` 0 to 1). It never starts by itself: only a press on the button, or the row in Home settings, plays it. With `fade_with_sleep` it gets quieter over the last 15 minutes of a sleep timer and stops when it ends. |
+| `bedtime_dim` [`false`] | `true` dims the couch-tv home into a warm amber for the last 15 minutes of a sleep timer. It only darkens the couch-tv page, not an app that is playing, and not the TV's brightness or picture settings. |
+| `smart_idle` [off] | Automatic OLED protection and idle power-off: `{"enabled": false, "home_idle_minutes": 15, "home_action": "ambient_clock", "paused_idle_minutes": 30, "quiet_hours": {"enabled": false, "start": "23:00", "end": "06:00", "idle_minutes": 15}}`. `home_action` is `"ambient_clock"`, `"screen_off"`, or `"tv_off"`. Setting either minute value to `0` turns that trigger off. `home_idle_minutes` is one of `5`, `10`, `15`, `30` or `60` (the same steps as Home settings), and `paused_idle_minutes` one of `10`, `15`, `20`, `30`, `45` or `60`: any other number is not an error, it is quietly read as the default (15 and 30), so `"home_idle_minutes": 2` behaves as 15. Paused-media auto-off works on Android TV (Option B and Option C) and Roku; it never turns off HDMI inputs or games with no media session, and is not available on Samsung or LG. Home settings, Smart Idle (under Look) wins over it. Off unless `enabled` is `true`. It sits beside, not over, `idle_photo_seconds` (above): that only fades the rows out, the ambient clock covers the whole screen in black after a longer wait, and the OLED look's burn in nudge is unchanged. Quiet hours are checked in the `weather.timezone` zone, else the TV's own. Option C reads only the settings made on the TV, not this file. |
+| `keep_watching` [`true`] | `false` hides the whole Keep watching row, heading and all: the layout closes the gap, the remote skips it and the home stops asking the bridge for it. A song still shows its Now playing card in the Night look. Home settings, Look, Show Keep watching wins over it. Works on the Android, LG, Samsung and Roku homes. |
+| `start_focus` [`"people"`] | Where focus starts when the Home button is pressed or when couch-tv opens: `"people"` (as before: the profile switcher at the top left when two or more people are set up, else Keep watching if cards exist, else apps), `"keep_watching"` (the first show card in Keep watching, falling back to apps if empty), or `"apps"` (the first app in the dock or grid). Any other value is ignored and the home starts as it always has. Home settings, Look, Start on wins over it (#211). |
+| `custom_cards` [none: off] | Your own cards at the end of the Keep watching row, from a small JSON file: a file on the bridge computer (`"cards.json"`, read from the folder `config.json` is in, or an absolute path) or an `http` or `https` link (`"https://raw.githubusercontent.com/you/repo/main/cards.json"`, or a Raspberry Pi on your Wi-Fi). Display only: a title, a value, a subtitle, a picture, and an installed app or an `http(s)` link for OK; at most 8 cards, nothing in the file is ever run. Read every 10 minutes; a bad file keeps the last good cards. Example: `{"cards": [{"title": "Solar today", "value": "18.4 kWh", "app": "com.example.solar"}, {"title": "Bin night", "value": "Recycling", "url": "https://example.com/bins"}]}`. The schema and limits: [TV-HOME.md](TV-HOME.md#custom-cards). |
+| `skip_watch_next` [none] | Package names never shown in the Keep watching row (e.g. `["com.google.android.youtube.tv"]`). |
+| `watch_next_per_app` [5] | The maximum number of Keep watching cards to show from any single app (1 to 20). |
+| `language` [the TV's own language if the home speaks it, else `en`] | The TV home's language until someone picks one in Home settings: `en` (English), `es` (Spanish), `es-MX` (Mexican Spanish), `it` (Italian), `de` (German), `tr` (Turkish), `fr` (French), `sr-Latn-RS` (Serbian Latin), `pl` (Polish), `cs` (Czech), `pt` (Brazilian Portuguese), `nl` (Dutch), `ro` (Romanian) or `zh-CN` (Simplified Chinese). The phone remote has its own choice, "Same as the TV" by default; Romanian is not available as a separate phone language yet. |
 
 ## Apps on the home
 
@@ -196,7 +320,8 @@ remote:
 - **Home settings, Apps** (gear tile) lists every app: OK moves one between home, More apps and
   hidden (hidden apps are not shown anywhere on that TV until you bring them back there), holding
   OK picks it up to change the order with up and down.
-- **New apps:** the Play Store is the **App Store** tile, first in More apps. An app installed later
+- **New apps:** the Play Store or Amazon Appstore is the **App Store** tile, near the end of More apps
+  by default. Move it onto the home or rearrange it like any other app. An app installed later
   goes to the end of the dock if there is room, otherwise first in More apps, with a small blue dot
   until it is opened once.
 
@@ -300,14 +425,73 @@ card is drawn by the app itself, so it cannot be previewed in a browser.
 
 ## Everything else
 
+**Never forward a port to the bridge.** The bridge is built for your home network only. Never expose it
+to the internet or forward port 5400 on your router. A private network (VPN) app you run yourself
+is the safe way to use the phone remote away from home.
+
 | Key | What it does |
 |---|---|
-| `bridge.host`, `bridge.port` [5400], `bridge.fallback_hosts` | Where the bridge runs. |
+| `bridge.host`, `bridge.port` [5400], `bridge.fallback_hosts` | Where the bridge runs. `fallback_hosts` lists other names the bridge may be opened by (see "Opening the bridge by another name" below). |
+| `bridge.pairing_key` [""] | Optional API pairing key. Empty/unset by default. When set, clients (phone remote and TV front-ends) must authenticate with this key. |
 | `weather` | `lat`, `lon`, `place`, `timezone`, for the weather on the home (Open-Meteo, no key). A suburb or city is enough; never a home address. `timezone` (for example `Europe/London`) is also the time zone the bridge writes times in. |
-| `country` [`IT` when `home.language` is `it`, `DE` when it is `de`, else "AU"] | Two letter code, for where shows stream (JustWatch), the country in links to Apple TV and Prime Video, and the country Claude is told about. |
+| `country` [`IT` for Italian, `DE` for German, `BE` for Dutch, `RS` for Serbian, `IL` for Hebrew, `CZ` for Czech, `PL` for Polish, `BR` for Brazilian Portuguese, `SA` for Arabic, `RO` for Romanian, `CN` for Simplified Chinese, else `AU`] | Two letter code, for where shows stream (JustWatch), the country in links to Apple TV and Prime Video, and the country Claude is told about. |
 | `country_name` | Optional: what to call the country in Claude's prompts, if the built-in list does not know your code. |
 | `client_name` ["Couch TV bridge"] | The name the TV shows for the bridge in its list of paired remotes. Set it before `pair_tv.py`; changing it later means pairing again. |
 | `screens` [] | Extra screens the TV can open, for example a computer through Moonlight. |
+
+### Switching the pairing key on
+
+Out of the box the bridge has no password: anything on your home Wi-Fi can use it, and so can a web
+page open on any phone or computer at home. The bridge already refuses pages from other sites (it
+checks the `Origin` a browser sends, and the name the page used to reach it, which stops a trick
+called DNS rebinding). But the TV apps load from files and send `Origin: null`, so the bridge has to
+accept `null`, and any web page can send `null` too (from a sandboxed frame). So the origin check
+alone cannot tell the TV from a hostile page. **Only the pairing key closes that gap.** With it on:
+
+- every `/api/` call except `/api/health` and `/api/pair` needs the key
+  (`Authorization: Bearer <key>`, `X-API-Key: <key>` or `?token=<key>`);
+- after 5 different wrong keys from one address within a minute, that address gets HTTP 429 for the
+  rest of that minute, whatever key it sends. The same wrong key sent again does not count, so a phone
+  or TV still holding an old key does not lock itself out, and the bridge computer itself
+  (`127.0.0.1`, the MCP tools, Claude) is never limited.
+
+Switching it on means every TV and phone needs the key, so do all of this in one go:
+
+1. **Add the key to `config.json`** and restart the bridge. Use 12 to 128 letters, digits, `-` or `_`
+   (the bridge refuses to start otherwise), and make it long, for example 20 random characters:
+   ```json
+   "bridge": { "host": "your-computer.local", "port": 5400, "pairing_key": "<your key>" }
+   ```
+2. **Google TV, Android TV and Fire TV (option B):** the TV home needs a `couch-tv-home.apk` newer
+   than 0.12 (0.12 and older cannot carry a key; until a newer release is out, build it with
+   `scripts/build-apk.sh`). Then run `apply.sh` again for each TV, the same way as the first time.
+   It reads the key from `config.json` and hands it to the TV:
+   ```sh
+   TV_IP=<tv address> BRIDGE_URL=http://<your-computer>:5400 APK=dist/couch-tv-home.apk sh tv-home/tools/apply.sh
+   ```
+3. **LG, Samsung and Roku:** the key is built into the app, so build it again and install it again
+   (`build.py` reads the key from `config.json`, or pass `--key`). Use the computer's number address,
+   as in each guide:
+   - LG: `.venv/bin/python lg/build.py --bridge http://<computer's address>:5400`, then install the
+     `.ipk` as in [LG.md](LG.md).
+   - Samsung: `.venv/bin/python samsung/build.py --bridge http://<computer's address>:5400`, then
+     install the `.wgt` as in [SAMSUNG.md](SAMSUNG.md).
+   - Roku: `.venv/bin/python roku/build.py --bridge http://<computer's address>:5400 --install <roku address>`
+     ([ROKU.md](ROKU.md)).
+4. **Phones:** the phone remote shows a "Pair this phone" screen. Type the key once, or open
+   `http://<your-computer>.local:5400/?pair=<key>` on the phone. A phone that has the remote on its
+   home screen pairs from there the same way.
+5. **The MCP tools and Claude** read the key from `config.json` by themselves. Restart Claude Code (or
+   whatever runs `bridge/mcp_server.py`) so it picks the key up.
+6. **Your own scripts and Home Assistant** calls need `-H "Authorization: Bearer <key>"` (and, for a
+   POST, `-H "Content-Type: application/json"`).
+
+Option C (the on-TV app) has its own PIN and is not affected.
+
+**Opening the bridge by another name.** The bridge answers to any number address, any `.local` name,
+`localhost` and the names in `bridge.host` and `bridge.fallback_hosts`. A page opened by any other
+name (a router name such as `computer.home`, say) gets "forbidden host": add that name to
+`bridge.fallback_hosts` and restart the bridge.
 
 ## Settings made on the TV (Home settings)
 
@@ -315,7 +499,7 @@ The gear tile in the dock (Settings) opens a small menu: **Home settings** (couc
 **TV settings** (Android's). Home settings changes, with the TV remote alone: the language, the
 weather's place (a town search), weather on or off, °C or °F and how often it is checked, the look,
 which scenes take turns and in what order, how long each stays, the clock, glass panels, a video
-background, your own photos, the
+background, your own photos (up to 50; each one lives in the TV's own storage and is loaded into its memory when it shows, so an old or low memory TV is happier with fewer), the
 apps (home, More apps or hidden, and their order), the people, and the quick buttons. README,
 "Settings on the TV", says how to use it. Its **Updates** section (the TV home app only) looks for
 new couch-tv releases on GitHub, once a week if the household said yes, or when asked, and installs
