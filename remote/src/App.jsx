@@ -316,8 +316,20 @@ export default function App() {
   if (artTv.current !== tvId) { artTv.current = tvId; lastArt.current = null; }
   const appColour = appById[tv?.app?.id]?.colour;
   const dark = off || Boolean(offState);
-  const artwork = dark ? null : (fresh || (appColour ? null : lastArt.current));
-  const tint = dark ? '#101012' : (appColour || null);
+  // couch-tv-lab: on the TV's home screen the remote wears the TV's own wallpaper (the scene it shows now,
+  // bridge /api/lab/scene), not the last show's artwork or an app colour.
+  const atHome = !dark && tv?.app?.id === 'home';
+  const [homeArt, setHomeArt] = useState(null);
+  useEffect(() => {
+    if (!atHome) return undefined;
+    let live = true;
+    const load = () => api.labScene().then((r) => live && r.image && setHomeArt(r.image)).catch(() => {});
+    load();
+    const t = setInterval(load, 20000);
+    return () => { live = false; clearInterval(t); };
+  }, [atHome, tvId]);
+  const artwork = dark ? null : atHome ? homeArt : (fresh || (appColour ? null : lastArt.current));
+  const tint = dark ? '#101012' : atHome ? '#1b2330' : (appColour || null);
 
   // Swipe down from the top (top bar, now playing, the Watch title) pulls the TV menu down with the finger.
   const moreSheet = useRef(null);
@@ -362,7 +374,7 @@ export default function App() {
     <div className="remote-col">
       <div className="pull-zone" {...pull}>
       {(() => { const d = (thisTv || (tvs.length === 1 ? tvs[0] : null))?.devmode; if (!d?.warning) return null; const said = d.warning_key ? t(d.warning_key, d.warning_vars) : d.warning; return <div className={`devwarn ${d.level || 'warn'}`} role="alert">{said === d.warning_key ? d.warning : said}</div>; })()}
-      <TopBar people={people} tvName={thisTv?.name} who={who} setWho={pickWho} tv={tv} appInfo={appById[tv?.app?.id]} reach={reach} sleepLeft={sleepLeft} onPower={onPower} />
+      <TopBar people={people} tvName={(thisTv || (tvs.length === 1 ? tvs[0] : null))?.name} who={who} setWho={pickWho} tv={tv} appInfo={appById[tv?.app?.id]} reach={reach} sleepLeft={sleepLeft} onPower={onPower} />
       {tv?.idle?.ends && (
         <div className="banner glass" role="status">
           <span>{t('idle_auto_off', { n: Math.max(1, Math.round((new Date(tv.idle.ends) - Date.now()) / 60000)) })}</span>
@@ -380,7 +392,7 @@ export default function App() {
       <Controls tv={tv} onKey={onKey} onVolume={onVolume} />
       <div className="shortcuts-row">
         <LabButtons reach={reach} onResult={(r) => { const m = labResult(r); say(m.text, m.kind); }} onError={(e) => say(e.message, 'err')} />
-        <button className="round glass more-up" aria-label={t('more_controls')} onClick={() => { tick(); setSheet('more'); }}><Ic.Chevron size={20} /></button>
+        <button className="round glass more-up" aria-label={t('more_controls')} onClick={() => { tick(); setSheet('more'); }}><Ic.Chevron size={22} /></button>
       </div>
       {wide && <button className="round glass tvhome wide-home" aria-label="TV home" onClick={() => { tick(); onKey('home'); }}><Ic.Home size={20} /></button>}
       {wide && askOn && !kidIds.includes(who) && <AskButton onAsk={openAsk} quiet={Boolean(offState)} />}

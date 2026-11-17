@@ -393,7 +393,7 @@ for _n, _s in (LAB.get("sources") or {}).items():
         SOURCES[_n] = {"url": _s["url"], "auth_env": _s.get("auth_env") if isinstance(_s.get("auth_env"), str) else None,
                        "ttl": max(10, min(int(_s.get("ttl") or 60), 3600))}
 PROM_URL = (LAB.get("prometheus") or "http://127.0.0.1:9090").rstrip("/")
-TYPES = ("stat", "list", "status", "text")
+TYPES = ("stat", "list", "status", "text", "panel")   # panel: several values packed in one (PANELS below)
 _cache = {}   # key -> (expires, value)
 
 
@@ -407,15 +407,15 @@ def _pages():
             if not isinstance(w, dict) or w.get("type") not in TYPES:
                 continue
             src = w.get("source")
-            if src != "prometheus" and src not in SOURCES:
+            if w["type"] == "panel" and w.get("kind") in PANELS:
+                pass
+            elif src != "prometheus" and src not in SOURCES:
                 log.warning("lab widget %s/%d skipped: unknown source %r", p["id"], i, src)
                 continue
             ws.append(dict(w, id=f"{p['id']}-{i}"))
         out.append({"id": p["id"], "title": str(p.get("title") or p["id"])[:30], "widgets": ws})
     return out
 
-
-PAGES = _pages()
 
 
 def _dig(v, path):
@@ -488,7 +488,10 @@ async def render_widget(w):
     fmt, dec, unit = w.get("format"), int(w.get("decimals") or 0), str(w.get("unit") or "")[:8]
     limit = max(1, min(int(w.get("max") or 5), 12))
     try:
-        if w["source"] == "prometheus":
+        if w["type"] == "panel":
+            out["kind"] = w["kind"]
+            out.update(await asyncio.wait_for(PANELS[w["kind"]](), 8))
+        elif w["source"] == "prometheus":
             res = await _prom(str(w.get("query") or ""), int(w.get("ttl") or 30))
             if w["type"] == "stat":
                 if w.get("value_label"):   # a label as the value, e.g. network_type="5G(NSA)"
@@ -529,6 +532,160 @@ async def render_widget(w):
     return out
 
 
+# ---------- panels: several live values packed into one widget ----------
+# {"type": "panel", "kind": <one of PANELS>} in lab.widgets. Each kind is computed here and sent finished:
+# the TV and the phone only draw it (rings, bars, dots, the map).
+#   internet  the router: signal score (the MTN page's own formula), network, live speed, devices
+#   homelab   every lab.proxmox node: CPU and memory, guests running, uptime
+#   services  lab.services [{"id","label","host","port","on"}]: a TCP check of each, every 30 s
+#   netmap    lab.netmap [{"id","label","host","port","parent","icon"}]: the network as a tree, with each
+#             node's own check and how many lab.services run on it
+#   study     the DisplayOS hub's first study track: day of total, today's lesson
+#   today     the hub's counts: due today, overdue, habits left, reminders
+#   photos    Immich asset counts (the IMMICH_API_KEY needs the asset.statistics permission)
+def _probe_list(key):
+    out = []
+    for n in (LAB.get(key) or [])[:32]:
+        if (isinstance(n, dict) and ID_RE.fullmatch(str(n.get("id") or "")) and re.fullmatch(r"[A-Za-z0-9.-]{1,100}", str(n.get("host") or ""))
+                and isinstance(n.get("port"), int) and not isinstance(n.get("port"), bool) and 0 < n["port"] < 65536):
+            out.append({"id": n["id"], "label": str(n.get("label") or n["id"])[:24], "host": n["host"], "port": n["port"],
+                        "on": str(n.get("on") or "")[:40], "parent": str(n.get("parent") or "")[:40], "icon": str(n.get("icon") or "")[:16]})
+    return out
+
+
+SERVICES = _probe_list("services")
+NETMAP = _probe_list("netmap")
+
+
+async def _probe(host, port):
+    key = f"tcp:{host}:{port}"
+    hit = _cache.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    up = await _reachable(host, port)
+    _cache[key] = (time.time() + 30, up)
+    return up
+
+
+def _lerp_pct(v, lo, hi):
+    return None if v is None else max(0.0, min(1.0, (v - lo) / (hi - lo))) * 100
+
+
+def signal_score(sinr, rsrp):
+    """The router page's score: 60% SINR (-5..25 dB), 40% RSRP (-120..-70 dBm), 0-100."""
+    s, r = _lerp_pct(sinr, -5, 25), _lerp_pct(rsrp, -120, -70)
+    if s is None and r is None:
+        return None
+    return round(0.6 * (s or 0) + 0.4 * (r or 0))
+
+
+def score_label(n):
+    return "no signal" if n is None else "excellent" if n >= 80 else "good" if n >= 60 else "fair" if n >= 40 else "poor"
+
+
+def _rate(bps):
+    if bps is None:
+        return "–"
+    for u in ("B/s", "KB/s", "MB/s"):
+        if bps < 1000 or u == "MB/s":
+            return f"{bps:.0f} {u}" if u == "B/s" or bps >= 10 else f"{bps:.1f} {u}"
+        bps /= 1024
+
+
+async def _promv(q, ttl=15):
+    res = await _prom(q, ttl)
+    try:
+        return float(res[0]["value"][1]) if res else None
+    except (TypeError, ValueError, KeyError, IndexError):
+        return None
+
+
+async def panel_internet():
+    ntype, info = await asyncio.gather(_promv("max(mtn_network_type)"), _prom("mtn_network_info", 15))
+    tech = "5g" if (ntype or 0) >= 5 else "lte"   # 5G NSA rides on LTE; the router page scores the NR side
+    rsrp, sinr, down, up, devices, online = await asyncio.gather(
+        _promv(f'max(mtn_signal_rsrp_dbm{{tech="{tech}"}})'), _promv(f'max(mtn_signal_sinr_db{{tech="{tech}"}})'),
+        _promv("sum(rate(mtn_wan_rx_bytes_total[2m]))"), _promv("sum(rate(mtn_wan_tx_bytes_total[2m]))"),
+        _promv("max(mtn_connected_devices)"), _promv("max(mtn_up)"))
+    score = signal_score(sinr, rsrp)
+    return {"score": score, "label": score_label(score), "network": str(info[0]["metric"].get("network_type", "–"))[:24] if info else "–",
+            "rsrp": rsrp, "sinr": sinr, "down": _rate(down), "up": _rate(up),
+            "devices": int(devices) if devices is not None else None, "online": online == 1}
+
+
+async def panel_homelab():
+    res = await asyncio.gather(*(asyncio.wait_for(pve_summary(p), 6) for p in PVE), return_exceptions=True)
+    nodes = []
+    for pid, sm in zip(PVE, res):
+        if isinstance(sm, Exception):
+            nodes.append({"id": pid, "label": PVE[pid]["label"], "online": False})
+            continue
+        run = [g for g in sm["guests"] if g["status"] == "running"]
+        nodes.append({"id": pid, "label": sm["label"], "online": True, "cpu": sm["cpu"],
+                      "mem": round(100 * sm["mem_gb"] / sm["memtotal_gb"]) if sm["memtotal_gb"] else None,
+                      "mem_text": f"{sm['mem_gb']}/{sm['memtotal_gb']} GB", "guests": len(run), "guests_total": len(sm["guests"]),
+                      "uptime": f"{sm['uptime_h'] // 24}d {sm['uptime_h'] % 24}h" if sm["uptime_h"] >= 24 else f"{sm['uptime_h']}h"})
+    return {"nodes": nodes}
+
+
+async def panel_services():
+    ups = await asyncio.gather(*(_probe(x["host"], x["port"]) for x in SERVICES))
+    items = [{"id": x["id"], "label": x["label"], "ok": up, "on": x["on"]} for x, up in zip(SERVICES, ups)]
+    return {"up": sum(ups), "total": len(items), "items": items}
+
+
+async def panel_netmap():
+    ups, svc = await asyncio.gather(asyncio.gather(*(_probe(n["host"], n["port"]) for n in NETMAP)), panel_services())
+    nodes = []
+    for n, up in zip(NETMAP, ups):
+        mine = [x for x in svc["items"] if x["on"] == n["id"]]
+        nodes.append({"id": n["id"], "label": n["label"], "parent": n["parent"], "icon": n["icon"], "ok": up,
+                      "svc": len(mine), "svc_up": sum(1 for x in mine if x["ok"])})
+    return {"nodes": nodes}
+
+
+async def panel_study():
+    if not HUB:
+        raise RuntimeError("no lab.hub_source")
+    d = await _source(HUB)
+    tr = ((d.get("study") or {}).get("tracks") or [None])[0]
+    if not isinstance(tr, dict):
+        return {"course": "Nothing to study today", "day": None, "total": None}
+    return {"course": str(tr.get("title") or "")[:60], "lesson": str(tr.get("lessonTitle") or "")[:80], "emoji": str(tr.get("emoji") or "")[:4],
+            "day": tr.get("day"), "total": tr.get("totalDays"), "streak": (d.get("study") or {}).get("streak")}
+
+
+async def panel_today():
+    if not HUB:
+        raise RuntimeError("no lab.hub_source")
+    c = (await _source(HUB)).get("counts") or {}
+    return {"items": [{"label": "Due today", "value": c.get("dueToday", 0)}, {"label": "Overdue", "value": c.get("overdue", 0), "warn": bool(c.get("overdue"))},
+                      {"label": "Habits left", "value": c.get("habitsLeft", 0)}, {"label": "Reminders", "value": c.get("remindersSoon", 0)}]}
+
+
+async def panel_photos():
+    key = os.environ.get("IMMICH_API_KEY")
+    if not key:
+        raise RuntimeError("IMMICH_API_KEY is not set in .env")
+    url = f"{IMMICH_URL}/api/assets/statistics"
+    hit = _cache.get(url)
+    if not (hit and hit[0] > time.time()):
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=6)) as s:
+            async with s.get(url, headers={"x-api-key": key}) as r:
+                if r.status == 403:
+                    raise RuntimeError("the Immich key needs asset.statistics")
+                if r.status >= 300:
+                    raise RuntimeError(f"Immich answered {r.status}")
+                _cache[url] = hit = (time.time() + 600, await r.json(content_type=None))
+    j = hit[1]
+    return {"images": j.get("images"), "videos": j.get("videos"), "total": j.get("total")}
+
+
+PANELS = {"internet": panel_internet, "homelab": panel_homelab, "services": panel_services, "netmap": panel_netmap,
+          "study": panel_study, "today": panel_today, "photos": panel_photos}
+PAGES = _pages()
+
+
 # ---------- the TV's widget grid ----------
 # lab.widgets is the catalog: widget definitions (as in lab.pages) plus "id" and "sizes" ([[1,1],[2,1]]).
 # Each TV keeps its own layout in data/widgets.<tv>.json: [{"id","x","y","w","h"}] on a GRID_COLS x
@@ -538,7 +695,11 @@ CATALOG = {}
 for _w in (LAB.get("widgets") or [])[:40]:
     if not isinstance(_w, dict) or not isinstance(_w.get("id"), str) or not ID_RE.fullmatch(_w["id"]) or _w["id"] in CATALOG:
         continue
-    if _w.get("type") not in TYPES or (_w.get("source") != "prometheus" and _w.get("source") not in SOURCES):
+    if _w.get("type") == "panel":
+        if _w.get("kind") not in PANELS:
+            log.warning("lab widget %s skipped: unknown panel kind %r", _w.get("id"), _w.get("kind"))
+            continue
+    elif _w.get("type") not in TYPES or (_w.get("source") != "prometheus" and _w.get("source") not in SOURCES):
         log.warning("lab widget %s skipped: unknown type or source", _w.get("id"))
         continue
     _sizes = [s for s in (_w.get("sizes") or [[1, 1]]) if isinstance(s, list) and len(s) == 2
@@ -676,11 +837,14 @@ async def _reachable(host, port):
 
 async def h_status(request):
     chips = []
-    net = CATALOG.get("internet")
-    if net:
-        r = await render_widget(dict(net, id="internet"))
-        chips.append({"id": "internet", "label": f"{r.get('value', '–')} · {r.get('sub', '')}".strip(" ·") if r["ok"] else "Router",
-                      "state": "ok" if r["ok"] else "down"})
+    if "internet" in CATALOG:
+        try:
+            n = await asyncio.wait_for(panel_internet(), 8)
+            chips.append({"id": "internet", "label": f"{n['network']} · {n['score']}" if n["score"] is not None else n["network"],
+                          "state": "ok" if n["online"] else "down"})
+        except Exception as e:
+            log.info("internet chip failed: %s", e)
+            chips.append({"id": "internet", "label": "Router", "state": "down"})
     if HUB:
         try:
             src = (await _source(HUB)).get("sources") or []
@@ -701,6 +865,23 @@ async def h_status(request):
     if LAB.get("power_pending"):
         chips.append({"id": "power", "label": str(LAB["power_pending"])[:40], "state": "idle"})
     return S.ok(chips=chips, links=[{"id": k, "label": v["label"]} for k, v in LINKS.items()], hub=bool(HUB))
+
+
+async def h_overview(request):
+    """The phone's Lab tab: the packed panels, each on its own so one slow source never blanks the rest."""
+    kinds = ["internet", "homelab", "services"] + (["study", "today"] if HUB else [])
+    res = await asyncio.gather(*(asyncio.wait_for(PANELS[k](), 8) for k in kinds), return_exceptions=True)
+    out, pending = {}, []
+    for k, r in zip(kinds, res):
+        if isinstance(r, Exception):
+            log.info("overview %s failed: %s", k, r)
+            out[k] = {"ok": False, "error": str(r)[:120] if isinstance(r, RuntimeError) else "unavailable"}
+        else:
+            out[k] = {"ok": True, **r}
+    if LAB.get("power_pending"):
+        pending = [str(LAB["power_pending"])[:40]]
+    return web.json_response({"ok": True, "panels": out, "links": [{"id": k, "label": v["label"]} for k, v in LINKS.items()],
+                              "hub": bool(HUB), "pending": pending, "at": S.now_iso()}, headers={"Cache-Control": "no-store"})
 
 
 async def h_hub(request):
@@ -989,8 +1170,31 @@ async def h_open(request):
     return S.ok(**r)
 
 
+# ---------- the TV's wallpaper, for the phone remote's background at home ----------
+# The TV home reports the bundled scene it shows (tv-home/web/app.js labScene); the phone asks for it.
+SCENE_RE = re.compile(r"backgrounds/[A-Za-z0-9_@-]{1,80}\.jpg")
+_scene = {}   # tv id -> path under /tv/
+
+
+async def h_scene_post(request):
+    data = await S.body(request)
+    img = data.get("image")
+    if not isinstance(img, str) or not SCENE_RE.fullmatch(img):
+        raise S.ApiError(400, "image must be backgrounds/<name>.jpg")
+    _scene[_tv_id(request, data)] = img
+    return S.ok()
+
+
+async def h_scene_get(request):
+    img = _scene.get(_tv_id(request))
+    return S.ok(image=f"/tv/{img}" if img else None)
+
+
 def routes(r):
+    r.add_get("/api/lab/scene", h_scene_get)
+    r.add_post("/api/lab/scene", h_scene_post)
     r.add_get("/api/lab/status", h_status)
+    r.add_get("/api/lab/overview", h_overview)
     r.add_post("/api/lab/open/{id}", h_open)
     r.add_get("/api/lab/host/{id}", h_host)
     r.add_get("/api/lab/wall", h_wall)

@@ -2023,21 +2023,56 @@ html.dock-mac.theme-night .app.hop { animation: dock-hop 520ms 1; }
   html.dock-mac.theme-night .app, html.dock-mac.theme-night .grid, html.dock-mac.theme-night .app .label { transition: none; }
   html.dock-mac.theme-night .app.hop { animation: none; }
 }
-/* couch-tv-lab: the widget grid (bridge/lab.py layout), Night look only, top right under the quick buttons.
-   Cells are fixed; widgets never stretch to fill space. */
-.lab-strip { position: fixed; z-index: 2; right: var(--safe-x); top: 9.5rem; width: 21rem; display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, 6rem); gap: 0.75rem; pointer-events: none; }
+/* couch-tv-lab: the widget grid (bridge/lab.py layout), Night look only, top right, a clear gap under the
+   quick buttons and above Keep watching. Cells are fixed; widgets never stretch to fill space. */
+.lab-strip { --lab-row: 5.5rem; position: fixed; z-index: 2; right: var(--safe-x); top: 12.5rem; width: 24rem; display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(4, var(--lab-row)); gap: 0.75rem; pointer-events: none; }
 .lab-strip:empty { display: none; }
-.lab-strip .lab-card { min-width: 0; overflow: hidden; box-sizing: border-box; padding: 0.75rem 1rem; border-radius: 1.125rem;
+.lab-strip .lab-card { min-width: 0; overflow: hidden; box-sizing: border-box; padding: 0.75rem 1rem; border-radius: 1.25rem;
   display: flex; flex-direction: column; justify-content: center; gap: 0.125rem;
-  background: rgba(16, 16, 20, 0.42); -webkit-backdrop-filter: blur(1rem); backdrop-filter: blur(1rem);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
-.lab-strip small { display: block; font-size: 0.875rem; font-weight: 600; color: rgba(255, 255, 255, 0.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lab-strip b { display: block; font-size: 1.625rem; line-height: 2rem; font-weight: 650; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lab-strip .text b { font-size: 1.0625rem; line-height: 1.4rem; }
-.lab-strip span { display: block; font-size: 0.875rem; color: rgba(255, 255, 255, 0.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lab-strip ul { list-style: none; margin: 0.25rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9375rem; }
-.lab-strip li { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; overflow: hidden; }
-.lab-strip .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; background: rgba(255, 255, 255, 0.4); }
-.lab-strip .dot.up { background: #3ddc84; } .lab-strip .dot.down { background: #ff5a5a; }
+  background: rgba(14, 14, 18, 0.5); -webkit-backdrop-filter: blur(1.25rem) saturate(1.3); backdrop-filter: blur(1.25rem) saturate(1.3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.09), 0 0.5rem 1.5rem rgba(0, 0, 0, 0.18); }
+.lab-strip small { display: block; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.01em; color: rgba(255, 255, 255, 0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lab-strip b { display: block; font-size: 1.5rem; line-height: 1.875rem; font-weight: 650; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lab-strip b i { font-style: normal; font-size: 1rem; color: rgba(255, 255, 255, 0.55); }
+.lab-strip b.warn { color: #ffb340; }
+.lab-strip .text b, .lab-strip b.t { font-size: 1.0625rem; line-height: 1.35rem; }
+.lab-strip span { display: block; font-size: 0.8125rem; color: rgba(255, 255, 255, 0.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lab-strip ul { list-style: none; margin: 0.25rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.875rem; }
+.lab-strip ul.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.75rem; }
+.lab-strip li { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; overflow: hidden; color: rgba(255, 255, 255, 0.85); }
+.lab-strip .dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; background: rgba(255, 255, 255, 0.4); }
+.lab-strip .dot.up { background: #3ddc84; } .lab-strip .dot.down { background: #ff5a5a; box-shadow: 0 0 0.5rem #ff5a5a; }
 .lab-strip .bad { box-shadow: inset 0 0 0 1px rgba(255, 90, 90, 0.5); }
+/* panels: a ring (or two) beside a short stack of text */
+.lab-strip .panel { flex-direction: row; align-items: center; justify-content: flex-start; gap: 0.875rem; }
+.lab-strip .panel.tall { flex-direction: column; align-items: stretch; justify-content: flex-start; }
+.lab-strip .pv { min-width: 0; display: flex; flex-direction: column; gap: 0.0625rem; }
+.lab-strip .pv.grow { flex: 1; align-items: flex-end; text-align: right; }
+.lab-strip .ring { position: relative; flex: none; width: 2.75rem; height: 2.75rem; display: inline-block; }
+.lab-strip .ring.big { width: 3.875rem; height: 3.875rem; }
+.lab-strip .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.lab-strip .ring circle { fill: none; stroke-width: 3.4; }
+.lab-strip .ring .track { stroke: rgba(255, 255, 255, 0.14); }
+.lab-strip .ring .bar { stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
+.lab-strip .ring em { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-style: normal;
+  font-size: 0.6875rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+.lab-strip .ring.big em { font-size: 1.125rem; }
+.lab-strip .ring em { flex-direction: column; line-height: 1; }
+.lab-strip .ring em u { text-decoration: none; font-size: 0.5rem; font-weight: 600; letter-spacing: 0.04em; color: rgba(255, 255, 255, 0.6); margin-top: 0.0625rem; }
+.lab-strip .ring.big em u { font-size: 0.5625rem; }
+.lab-strip .speeds i { font-style: normal; font-weight: 700; } .lab-strip .speeds .dn { color: #7cc4ff; } .lab-strip .speeds .up { color: #3ddc84; }
+.lab-strip .nodes { display: flex; width: 100%; gap: 0.75rem; }
+.lab-strip .node { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.375rem; }
+.lab-strip .node .pv { margin-left: 0.25rem; }
+.lab-strip .node b { font-size: 1.0625rem; line-height: 1.3rem; }
+.lab-strip .node.off { flex-direction: column; align-items: flex-start; }
+.lab-strip .dots { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: flex-end; margin-bottom: 0.25rem; }
+.lab-strip .nums { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; text-align: center; }
+.lab-strip .nums small { font-size: 0.6875rem; }
+.lab-strip .p-netmap { padding: 0.5rem 0.75rem; }
+.lab-strip .netmap { width: 100%; height: 100%; }
+.lab-strip .netmap path { fill: none; stroke: rgba(255, 255, 255, 0.28); stroke-width: 1.5; }
+.lab-strip .netmap path.down { stroke: #ff5a5a; stroke-dasharray: 4 4; }
+.lab-strip .netmap text { fill: #fff; font-size: 13px; font-weight: 600; }
+.lab-strip .netmap .svc { fill: rgba(255, 255, 255, 0.55); font-weight: 500; }

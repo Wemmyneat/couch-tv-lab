@@ -36,12 +36,12 @@ export function LabButtons({ reach, onResult, onError }) {
     api.labAction(b.id).then(onResult, onError).finally(() => setBusy(null));
   };
   return (
-    <div className="lab-buttons" role="group" aria-label="Shortcuts">
+    <div className="lab-buttons glass" role="group" aria-label="Shortcuts">
       {buttons.map((b) => {
         const I = ICON[b.icon] || Ic.Bolt;
         return (
-          <button key={b.id} className={`lab-btn glass ${busy === b.id ? 'busy' : ''}`} onClick={() => run(b)} aria-busy={busy === b.id}>
-            <I size={20} /><span>{b.label}</span>
+          <button key={b.id} className={`lab-btn ${busy === b.id ? 'busy' : ''}`} onClick={() => run(b)} aria-busy={busy === b.id}>
+            <I size={19} /><span>{b.label}</span>
           </button>
         );
       })}
@@ -209,20 +209,61 @@ function HostSheet({ chip, links, onClose, onSaid }) {
   );
 }
 
-const STATE_DOT = { ok: 'up', down: 'down', warn: 'warn', idle: 'idle' };
+// ---------- the Lab tab ----------
+// Read at a glance, then act: the router's signal ring on top, the homelab as one grouped list (each node
+// with CPU and memory rings, the service checks, today's hub), round buttons for the TV, and the two
+// editors at the bottom. All values come finished from /api/lab/overview (bridge/lab.py PANELS).
+const GREEN = '#3ddc84'; const AMBER = '#ffb340'; const RED = '#ff5a5a'; const BLUE = '#7cc4ff';
+const scoreColour = (n) => (n == null ? 'rgba(255,255,255,.3)' : n >= 70 ? GREEN : n >= 40 ? AMBER : RED);
+const loadColour = (n) => (n == null ? 'rgba(255,255,255,.3)' : n < 75 ? BLUE : n < 90 ? AMBER : RED);
+
+function Ring({ pct, colour, size = 40, stroke = 3.6, children }) {
+  const r = 18 - stroke / 2; const c = 2 * Math.PI * r; const p = Math.max(0, Math.min(100, pct || 0));
+  return (
+    <span className="ring" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r={r} className="track" strokeWidth={stroke} />
+        <circle cx="18" cy="18" r={r} className="bar" stroke={colour} strokeWidth={stroke} strokeDasharray={c} strokeDashoffset={c * (1 - p / 100)} /></svg>
+      <em>{children}</em>
+    </span>
+  );
+}
+
+function Row({ onClick, children, chevron = true }) {
+  const Tag = onClick ? 'button' : 'div';
+  return <Tag className="lrow" onClick={onClick ? () => { tick(); onClick(); } : undefined}>{children}{onClick && chevron && <Ic.Back size={16} className="lrow-go" />}</Tag>;
+}
+
+function ServicesSheet({ open, items, onClose }) {
+  const groups = [];
+  (items || []).forEach((x) => { const g = groups.find((y) => y.on === x.on); if (g) g.items.push(x); else groups.push({ on: x.on, items: [x] }); });
+  return (
+    <Sheet open={open} onClose={onClose} title="Services">
+      <div className="hub-sheet">
+        {groups.map((g) => (
+          <section key={g.on || 'x'}>
+            <h3 className="lab-h">{g.on || 'Other'}</h3>
+            <ul className="wcat">{g.items.map((x) => <li key={x.id}><i className={`dot ${x.ok ? 'up' : 'down'}`} /><div><b>{x.label}</b><small>{x.ok ? 'answering' : 'not answering'}</small></div></li>)}</ul>
+          </section>
+        ))}
+        <p className="lab-sub">The bridge checks each port every 30 seconds. It cannot restart anything.</p>
+      </div>
+    </Sheet>
+  );
+}
 
 export function LabPage({ reach, active, onSaid }) {
-  const [st, setSt] = useState(null);
+  const [d, setD] = useState(null);
   const [view, setView] = useState('home');
   const [busy, setBusy] = useState(null);
   const [hub, setHub] = useState(false);
   const [host, setHost] = useState(null);
+  const [svc, setSvc] = useState(false);
   useEffect(() => {
     if (!active) return undefined;
     let live = true;
-    const load = () => api.labStatus().then((d) => live && setSt(d)).catch(() => {});
+    const load = () => api.labOverview().then((r) => live && setD(r)).catch(() => {});
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 20000);
     return () => { live = false; clearInterval(t); };
   }, [active, reach]);
   const run = (key, p) => { if (busy) return; tick(); setBusy(key); p.then((r) => { const m = labResult(r); onSaid?.(r.note || m.text, m.kind); }, (e) => onSaid?.(e.message, 'err')).finally(() => setBusy(null)); };
@@ -235,30 +276,80 @@ export function LabPage({ reach, active, onSaid }) {
       </div>
     );
   }
-  const hosts = (st?.chips || []).filter((c) => !['internet', 'hub', 'power'].includes(c.id));
+  const P = d?.panels || {};
+  const net = P.internet; const lab = P.homelab; const sv = P.services; const study = P.study; const today = P.today;
+  const down = (sv?.items || []).filter((x) => !x.ok);
+  const summary = !d ? 'Checking…' : sv?.ok ? (down.length ? `${down.length} ${down.length === 1 ? 'service' : 'services'} down` : 'Everything is running') : 'Some checks did not answer';
+  const todayLine = today?.ok ? today.items.filter((x) => x.value).map((x) => `${x.value} ${x.label.toLowerCase()}`).join(' · ') || 'Nothing due' : '';
+  const links = (d?.links || []).filter((l) => !l.id.startsWith('proxmenux'));
+  const actions = [
+    { id: 'shot', label: 'Screenshot', I: Ic.Camera, go: () => api.labAction('screenshot'), accent: true },
+    { id: 'wall', label: 'DisplayOS', I: Ic.Screen, go: () => api.labWall() },
+    ...links.map((l) => ({ id: l.id, label: l.label, I: Ic.Chart, go: () => api.labOpen(l.id) })),
+  ];
   return (
     <div className="lab">
-      <h1 className="lab-title">Lab</h1>
-      <div className="lab-chips" role="list" aria-label="Status">
-        {(st?.chips || []).map((c) => <span key={c.id} role="listitem" className="lab-chip glass"><i className={`dot ${STATE_DOT[c.state] || ''}`} />{c.label}</span>)}
-      </div>
+      <header className="lab-head"><h1 className="lab-title">Lab</h1><p className={`lab-summary ${down.length ? 'warn' : ''}`}>{summary}</p></header>
+
+      <section className="lab-hero" aria-label="Internet">
+        <Ring pct={net?.score} colour={scoreColour(net?.score)} size={92} stroke={3.2}><b>{net?.ok ? (net.score ?? '–') : '–'}</b><small>{net?.ok ? net.label : 'router'}</small></Ring>
+        <div className="lab-hero-text">
+          <small>Internet</small>
+          <b>{net?.ok ? net.network : (d ? 'Router not answering' : '…')}</b>
+          {net?.ok && <span className="speeds"><i className="dn">↓</i> {net.down} <i className="up">↑</i> {net.up}</span>}
+          {net?.ok && net.devices != null && <span>{net.devices} devices connected</span>}
+        </div>
+      </section>
+
       <h3 className="lab-h">On the TV</h3>
-      <div className="lab-tiles">
-        <button className="lab-tile glass accent" aria-busy={busy === 'shot'} onClick={() => run('shot', api.labAction('screenshot'))}><Ic.Camera size={22} /><span>Screenshot</span></button>
-        <button className="lab-tile glass" aria-busy={busy === 'wall'} onClick={() => run('wall', api.labWall())}><Ic.Screen size={22} /><span>Show DisplayOS</span></button>
-        {(st?.links || []).filter((l) => !l.id.startsWith('proxmenux')).map((l) => <button key={l.id} className="lab-tile glass" aria-busy={busy === l.id} onClick={() => run(l.id, api.labOpen(l.id))}><Ic.Chart size={22} /><span>Show {l.label}</span></button>)}
+      <div className="lab-actions" role="group" aria-label="On the TV">
+        {actions.map((a) => (
+          <button key={a.id} className={`lab-act ${a.accent ? 'accent' : ''}`} aria-busy={busy === a.id} onClick={() => run(a.id, a.go())}>
+            <span className="glass"><a.I size={22} /></span><small>{a.label}</small>
+          </button>
+        ))}
       </div>
+
       <h3 className="lab-h">Homelab</h3>
-      <div className="lab-tiles">
-        {hosts.map((h) => <button key={h.id} className="lab-tile glass small" onClick={() => { tick(); setHost(h); }}><span>{h.label.split(' · ')[0]}</span><small><i className={`dot ${STATE_DOT[h.state]}`} />{h.state !== 'ok' ? 'down' : h.pve ? h.label.split(' · ').slice(1).join(' · ') : 'up'}</small></button>)}
-        {st?.hub && <button className="lab-tile glass small" onClick={() => { tick(); setHub(true); }}><span>Hub actions</span><small>tasks · habits</small></button>}
+      <div className="lgroup glass">
+        {(lab?.nodes || []).map((n) => (
+          <Row key={n.id} onClick={() => setHost({ id: n.id, label: n.label, pve: true, state: n.online ? 'ok' : 'down' })}>
+            {n.online ? (<span className="lrings"><Ring pct={n.cpu} colour={loadColour(n.cpu)} size={36}>{n.cpu}</Ring><Ring pct={n.mem} colour={loadColour(n.mem)} size={36}>{n.mem}</Ring></span>)
+              : <i className="dot down" />}
+            <span className="ltext"><b>{n.label}</b><small>{n.online ? `CPU ${n.cpu}% · RAM ${n.mem_text} · ${n.guests}/${n.guests_total} guests · up ${n.uptime}` : 'not answering'}</small></span>
+          </Row>
+        ))}
+        {sv?.ok && (
+          <Row onClick={() => setSvc(true)}>
+            <span className="lbadge" style={{ color: down.length ? AMBER : GREEN }}>{sv.up}<i>/{sv.total}</i></span>
+            <span className="ltext"><b>Services</b><small>{down.length ? down.map((x) => x.label).join(', ') + ' not answering' : 'All answering'}</small></span>
+          </Row>
+        )}
+        {(d?.pending || []).map((x) => <Row key={x}><i className="dot idle" /><span className="ltext"><b>{x.split(' · ')[0]}</b><small>{x.split(' · ').slice(1).join(' · ')}</small></span></Row>)}
       </div>
-      <div className="lab-tiles">
-        <button className="lab-tile glass small" onClick={() => { tick(); setView('widgets'); }}><span>TV widgets</span><small>add · arrange</small></button>
-        <button className="lab-tile glass small" onClick={() => { tick(); setView('shots'); }}><span>Screenshots</span><small>server · Immich</small></button>
+
+      {d?.hub && (<>
+        <h3 className="lab-h">Today</h3>
+        <div className="lgroup glass">
+          {study?.ok && study.day && (
+            <Row>
+              <Ring pct={(100 * study.day) / study.total} colour={BLUE} size={36}>{study.day}</Ring>
+              <span className="ltext"><b>{study.course}</b><small>Day {study.day} of {study.total}{study.lesson ? ` · ${study.lesson}` : ''}</small></span>
+            </Row>
+          )}
+          <Row onClick={() => setHub(true)}><span className="licon"><Ic.Star size={18} /></span><span className="ltext"><b>Tasks and habits</b><small>{todayLine}</small></span></Row>
+        </div>
+      </>)}
+
+      <h3 className="lab-h">Manage</h3>
+      <div className="lgroup glass">
+        <Row onClick={() => setView('widgets')}><span className="licon"><Ic.Grid size={18} /></span><span className="ltext"><b>TV widgets</b><small>Add and arrange what the TV shows</small></span></Row>
+        <Row onClick={() => setView('shots')}><span className="licon"><Ic.Camera size={18} /></span><span className="ltext"><b>Screenshots</b><small>Saved on the server and in Immich</small></span></Row>
       </div>
+
       <HubSheet open={hub} onClose={() => setHub(false)} onSaid={onSaid} />
-      <HostSheet chip={host} links={st?.links} onClose={() => setHost(null)} onSaid={onSaid} />
+      <HostSheet chip={host} links={d?.links} onClose={() => setHost(null)} onSaid={onSaid} />
+      <ServicesSheet open={svc} items={sv?.items} onClose={() => setSvc(false)} />
     </div>
   );
 }

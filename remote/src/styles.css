@@ -68,7 +68,7 @@ main { position: relative; z-index: 1; height: 100%; }
 /* Single column (normal iPhone, Duo cover screen) */
 .remote-col {
   height: 100%; display: flex; flex-direction: column; gap: var(--gap);
-  padding: calc(var(--sa-t) + 10px) var(--side) calc(var(--sa-b) + 10px);
+  padding: calc(var(--sa-t) + 14px) var(--side) calc(var(--sa-b) + 10px);
   max-width: 560px; margin: 0 auto; container: remote / inline-size;
 }
 
@@ -94,6 +94,12 @@ main { position: relative; z-index: 1; height: 100%; }
 .round.small { width: 44px; height: 44px; }
 .round.big { width: var(--ctl); height: var(--ctl); }
 .power.is-on { color: var(--ink); }
+/* couch-tv-lab: the power button reads as an off switch: a soft red while the TV is on, green to wake it */
+.topbar .power { width: 48px; height: 48px; color: #7ee2a8; background: rgba(61, 220, 132, 0.16); }
+.topbar .power.is-on { color: #ff8a80; background: rgba(255, 69, 58, 0.2); box-shadow: inset 0 0 0 1px rgba(255, 105, 97, 0.35); }
+.topbar.solo .tvname { text-align: left; padding-left: 4px; }
+.topbar.solo .tvname b { display: block; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.topbar.solo .tvname span { font-size: 13px; font-weight: 500; color: var(--ink-2); visibility: visible; }
 
 .tv-chip { align-self: center; height: 44px; padding: 0 16px; border-radius: 20px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
 
@@ -559,16 +565,19 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .kids-found b { font-size: 16px; }
 .kids-off { width: 100%; margin-top: 12px; color: var(--err); }
 /* couch-tv-lab: custom buttons strip (Lab.jsx) */
-.lab-buttons { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; }
+/* one glass bar the height of the tab bar: icon over a short label, each button an equal share */
+.lab-buttons { display: flex; height: 52px; padding: 3px; border-radius: 26px; overflow-x: auto; scrollbar-width: none; }
 .lab-buttons::-webkit-scrollbar { display: none; }
-.lab-btn { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
-  border-radius: 22px; font-size: 15px; font-weight: 500; white-space: nowrap; }
+.lab-btn { flex: 1 0 64px; min-width: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 23px; font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--ink); }
+.lab-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.lab-btn:active { background: rgba(255, 255, 255, 0.14); }
 .lab-btn.busy { opacity: 0.55; }
 .app.is-off .lab-buttons { opacity: 0.4; pointer-events: none; }
 .toast.warn { border-color: rgba(255, 196, 0, 0.6); }
 
 /* couch-tv-lab: the Lab tab (Lab.jsx) */
-.lab-page { height: 100%; overflow-y: auto; }
+.lab-page { height: 100%; overflow-y: auto; -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
 .lab { display: flex; flex-direction: column; gap: 12px; padding: 12px var(--side, 16px) 96px; }
 .lab-tabs { flex-wrap: wrap; }
 .lab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -593,7 +602,7 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .watch-col .lab { padding-top: 0; }
 
 /* couch-tv-lab: TV widgets editor (Lab.jsx WidgetEditor) */
-.lab { padding-top: max(12px, env(safe-area-inset-top)); }
+.lab { padding-top: calc(var(--sa-t) + 14px); }
 .wedit { display: flex; flex-direction: column; gap: 12px; }
 .wgrid { display: grid; gap: 8px; padding: 10px; border-radius: 20px; background: rgba(255,255,255,0.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
 .wcell { border-radius: 14px; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.12); }
@@ -656,7 +665,7 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .playbig:active { transform: scale(0.96); }
 .shortcuts-row { display: flex; align-items: center; gap: 8px; }
 .shortcuts-row .lab-buttons { flex: 1; min-width: 0; }
-.shortcuts-row .more-up { flex: none; color: #7cc4ff; background: rgba(124,196,255,0.16); }
+.shortcuts-row .more-up { flex: none; width: 52px; height: 52px; color: #7cc4ff; background: rgba(124,196,255,0.16); }
 .tabrow { display: flex; align-items: center; gap: 8px; justify-content: center; }
 .tabrow .tabs { flex: 1; max-width: 420px; }
 .tabrow .tvhome, .wide-home { width: 52px; height: 52px; flex: none; }
@@ -674,3 +683,44 @@ main.single { display: flex; flex-direction: column; padding-left: var(--sa-l); 
 .shot-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .shot-actions a.chip { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
 .shot-actions .danger { color: #ff8a8a; box-shadow: inset 0 0 0 1px rgba(255,90,90,0.6); }
+
+/* couch-tv-lab: Lab tab v2 (owner's review): a signal ring on top, grouped lists, round TV actions */
+.lab-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 2px; }
+.lab-summary { font-size: 15px; color: var(--ink-2); }
+.lab-summary.warn { color: #ffb340; }
+.ring { position: relative; display: inline-flex; flex: none; }
+.ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; }
+.ring .track { stroke: rgba(255, 255, 255, 0.12); }
+.ring .bar { stroke-linecap: round; transition: stroke-dashoffset 0.6s var(--ease); }
+.ring em { position: relative; margin: auto; display: flex; flex-direction: column; align-items: center; font-style: normal;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.lab-hero { display: flex; align-items: center; gap: 18px; padding: 6px 2px 4px; }
+.lab-hero .ring em b { font: 700 30px/1 var(--font-d, inherit); letter-spacing: -0.02em; }
+.lab-hero .ring em small { font-size: 11px; font-weight: 600; color: var(--ink-2); margin-top: 3px; }
+.lab-hero-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lab-hero-text small { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.lab-hero-text b { font: 700 24px/1.15 var(--font-d, inherit); }
+.lab-hero-text span { font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.speeds i { font-style: normal; font-weight: 700; } .speeds .dn { color: #7cc4ff; } .speeds .up { color: #3ddc84; }
+.lab-actions { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--side, 16px)); padding: 2px var(--side, 16px); }
+.lab-actions::-webkit-scrollbar { display: none; }
+.lab-act { flex: 0 0 76px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.lab-act > span { width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; }
+.lab-act small { font-size: 12px; font-weight: 500; color: var(--ink-2); text-align: center; line-height: 1.2; }
+.lab-act.accent > span { background: rgba(124, 196, 255, 0.2); color: #cfe8ff; }
+.lab-act[aria-busy="true"] { opacity: 0.5; }
+.lab-act:active > span { transform: scale(0.94); }
+.lgroup { border-radius: 20px; overflow: hidden; }
+.lrow { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 14px; text-align: left; position: relative; }
+.lrow + .lrow::before { content: ''; position: absolute; top: 0; left: 14px; right: 0; height: 1px; background: rgba(255, 255, 255, 0.07); }
+button.lrow:active { background: rgba(255, 255, 255, 0.06); }
+.lrow .ltext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lrow .ltext b { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .ltext small { font-size: 13px; color: var(--ink-2); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lrow-go { flex: none; transform: rotate(180deg); color: var(--ink-3, rgba(255,255,255,.35)); }
+.lrings { display: flex; gap: 4px; flex: none; }
+.lbadge { flex: none; min-width: 76px; font: 700 22px/1 var(--font-d, inherit); font-variant-numeric: tabular-nums; }
+.lbadge i { font-style: normal; font-size: 14px; color: var(--ink-2); }
+.licon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.08); }
+.lrow .dot { margin: 0 14px 0 12px; }

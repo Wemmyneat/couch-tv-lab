@@ -407,6 +407,17 @@ class TV:
             if safe:
                 await self.adb("shell", "input", "text", safe, timeout=10)
             return
+        # couch-tv-lab: the remote protocol's text only lands while the TV has told it a text field is open
+        # (its IME state), so it was dropped now and then. ADB types into whatever field has focus, so
+        # it goes first when the text survives `input text` whole; anything else uses the remote protocol.
+        if await self.adb_ready():
+            safe = adb_text(text)
+            if safe and safe[1:-1].replace("%s", " ") == text:
+                try:
+                    await self.adb("shell", "input", "text", safe, timeout=10)
+                    return
+                except Exception as e:
+                    self.log.info("adb text failed, trying the remote protocol: %s", e)
         self.require()
         self.remote.send_text(text)
 
