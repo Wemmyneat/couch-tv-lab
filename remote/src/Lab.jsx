@@ -412,7 +412,7 @@ export function WidgetEditor({ onSaid }) {
   for (let y = 0; y < grid.rows; y++) for (let x = 0; x < grid.cols; x++) if (!taken.has(`${x},${y}`)) empty.push({ x, y });
   return (
     <div className="wedit">
-      <p className="lab-sub">Tap a widget, then move it, change its size or take it off. Living room · {grid.cols} × {grid.rows}</p>
+      <p className="lab-sub">Tap a widget, then move it, change its size or take it off. Wemmyneat · {grid.cols} × {grid.rows}</p>
       <div className="wgrid" style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${grid.rows}, 64px)` }}>
         {empty.map((e) => <div key={`e${e.x},${e.y}`} className="wcell" style={{ gridColumn: e.x + 1, gridRow: e.y + 1 }} />)}
         {items.map((i) => (
