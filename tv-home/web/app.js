@@ -626,7 +626,8 @@
     if (w.kind === "homelab") {
       return '<div class="nodes">' + (w.nodes || []).map(function (n) {
         if (!n.online) return '<div class="node off"><small>' + esc(n.label) + "</small><b>offline</b></div>";
-        return '<div class="node">' + labRing(n.cpu, labLoadColour(n.cpu), esc(n.cpu) + "<u>CPU</u>") + labRing(n.mem, labLoadColour(n.mem), esc(n.mem) + "<u>RAM</u>") +
+        return '<div class="node"><div class="ring-col">' + labRing(n.cpu, labLoadColour(n.cpu), esc(n.cpu)) + '<span class="ring-label">CPU</span></div>' +
+          '<div class="ring-col">' + labRing(n.mem, labLoadColour(n.mem), esc(n.mem)) + '<span class="ring-label">RAM</span></div>' +
           '<div class="pv"><b>' + esc(n.label) + "</b><span>" + esc(n.guests) + (n.guests === 1 ? " guest" : " guests") + "</span></div></div>";
       }).join("") + "</div>";
     }
@@ -642,8 +643,10 @@
     if (w.kind === "netmap") return labNetmap(w.nodes || []);
     if (w.kind === "study") {
       var pct = w.day && w.total ? 100 * w.day / w.total : 0;
-      return labRing(pct, LAB_BLUE, w.day ? esc(w.day) + "<u>of " + esc(w.total) + "</u>" : "–", "big") +
-        '<div class="pv"><small>' + esc((w.emoji ? w.emoji + " " : "") + "Studying · day " + (w.day || "–")) + "</small><b class=\"t\">" + esc(w.course) + "</b>" +
+      return labRing(pct, LAB_BLUE, w.day ? esc(w.day) : "–", "big") +
+        '<div class="pv"><small>' + esc((w.emoji ? w.emoji + " " : "") + "Studying · day " + (w.day || "–")) + "</small>" +
+        (w.total ? '<span class="of-total">of ' + esc(w.total) + " days</span>" : "") +
+        "<b class=\"t\">" + esc(w.course) + "</b>" +
         (wide ? "<span>" + esc(w.lesson || "") + "</span>" : "") + "</div>";
     }
     if (w.kind === "today") {
