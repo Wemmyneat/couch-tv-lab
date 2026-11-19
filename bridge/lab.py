@@ -779,11 +779,17 @@ async def panel_internet():
         net = str(info[0]["metric"].get(net["label"], "–"))[:24] if info else "–"
     score = signal_score(v.get("sinr"), v.get("rsrp")) if v.get("sinr") is not None and v.get("rsrp") is not None else None
     num = lambda k: int(v[k]) if v.get(k) is not None else None  # noqa: E731
-    online = v.get("online")
-    return {"score": score, "label": score_label(score) if score is not None else ("online" if online != 0 else "offline"),
+    # online: True / False, or None when it is not known. A configured query with no answer (Prometheus or the
+    # exporter down) is unknown, never "online"; without an online query, a real connection decides.
+    if "online" in q:
+        online = None if v.get("online") is None else v["online"] == 1
+    else:
+        online = await _latency_ms(c["host"], c["port"]) is not None
+    return {"score": score, "label": score_label(score) if score is not None and online else
+            ("no data" if online is None else "online" if online else "offline"),
             "network": net or "Internet", "rsrp": v.get("rsrp"), "sinr": v.get("sinr"),
             "down": _rate(v.get("down")) if "down" in v else "–", "up": _rate(v.get("up")) if "up" in v else "–",
-            "devices": num("devices"), "online": online is None or online == 1, "wifi": num("wifi"), "wired": num("wired"),
+            "devices": num("devices"), "online": online, "wifi": num("wifi"), "wired": num("wired"),
             # adguard: on / off / down; router_dns: the router hands out AdGuard's address (None if not known)
             "adguard": ag, "router_dns": None if v.get("dns_ok") is None else v["dns_ok"] == 1}
 
