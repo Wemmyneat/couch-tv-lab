@@ -18,7 +18,8 @@ Where we must touch an upstream file, keep it to a **small hook** and mark it wi
 conflict is easy to recognise and resolve. Currently: `server.py` (3 lines: import and routes),
 `MainActivity.kt` (`TVOS.reload`), `FireWatch.kt` (TCL in the Home-key list), `app.js`/`app.css`/`index.html`
 (widget grid, native reload), the remote's `App.jsx`/`Remote.jsx`/`Sheets.jsx`/`styles.css` (Remote v2),
-`tv.py` (`pm list packages -e`, typed text over ADB first), `config.py` (`watch_next_block`), `build.gradle.kts` (version, `webDebug`).
+`tv.py` (`pm list packages -e`, typed text over ADB first), `config.py` (`watch_next_block`), `build.gradle.kts` (version, `webDebug`), `AGENTS.md` (one section
+pointing at lab/SETUP-LAB.md, just before "Rules while you work"), `.gitignore` (`lab/.deploy-host`).
 `git diff upstream/main --stat` shows the full list at any time.
 
 ## 2. When upstream ships the same thing, take theirs and drop ours

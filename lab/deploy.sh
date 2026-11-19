@@ -3,9 +3,11 @@
 #   lab/deploy.sh            copy code, keep the server's config.json/.env/data, restart the bridge
 #   lab/deploy.sh --remote   also build the phone remote here (npm ci && npm run build) and ship remote/dist
 #   lab/deploy.sh --web      copy only; the TV home page (tv-home/web) is served from disk, no restart needed
-# Server and path: DEPLOY_HOST (default wemserver-lan), DEPLOY_DIR (default /opt/couch-tv-lab).
+# Server and path: DEPLOY_HOST (or one line in lab/.deploy-host, which git ignores: your ssh host name),
+# DEPLOY_DIR (default /opt/couch-tv-lab).
 set -euo pipefail
-HOST="${DEPLOY_HOST:-wemserver-lan}"; DIR="${DEPLOY_DIR:-/opt/couch-tv-lab}"
+HOST="${DEPLOY_HOST:-$(head -n1 "$(dirname "$0")/.deploy-host" 2>/dev/null || true)}"; DIR="${DEPLOY_DIR:-/opt/couch-tv-lab}"
+[ -n "$HOST" ] || { echo "deploy: set DEPLOY_HOST, or put your server's ssh host name in lab/.deploy-host" >&2; exit 2; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # The phone remote is built on this computer and only its output is shipped, so the service user never
 # runs npm or writes code on the server.

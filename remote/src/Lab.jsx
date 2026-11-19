@@ -303,7 +303,7 @@ export function LabPage({ reach, active, onSaid, tvName }) {
         <div className="lab-hero-text">
           <small>Internet</small>
           <b>{net?.ok ? net.network : (d ? 'Router not answering' : '…')}</b>
-          {net?.ok && <span className="speeds"><i className="dn">↓</i> {net.down} <i className="up">↑</i> {net.up}</span>}
+          {net?.ok && (net.down !== '–' || net.up !== '–') && <span className="speeds"><i className="dn">↓</i> {net.down} <i className="up">↑</i> {net.up}</span>}
           {net?.ok && (net.wifi != null || net.devices != null) && <span>{net.wifi != null ? `${net.wifi} on Wi-Fi · ${net.wired} wired` : `${net.devices} devices connected`}</span>}
           {net?.ok && net.adguard && <span className={`ag ${net.adguard}`}>AdGuard {net.adguard === 'on' && net.router_dns === false ? 'on, but the router does not use it' : { on: 'blocking ads', off: 'not blocking', down: 'not answering' }[net.adguard]}</span>}
         </div>

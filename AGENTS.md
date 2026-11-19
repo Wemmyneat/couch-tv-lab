@@ -595,6 +595,14 @@ plugged in fixes that). It needs the same read back and the same clear yes as ev
 before it touches a TV: `sync/install.sh` changes each TV, and `calibrate` and `play` make both TVs
 pause, jump and play. `sync.py dry` only reads and is fine before the yes.
 
+## The homelab layer (couch-tv-lab, only if they have a server or homelab)
+
+This fork adds homelab widgets, a Lab tab on the phone remote and dashboards on the TV. It needs option B.
+After the TV works, ask once: "Do you run a server or a homelab at home? I can put your services, Proxmox,
+network and AdGuard on the TV." If yes, follow [lab/SETUP-LAB.md](lab/SETUP-LAB.md): its own questions, the
+same read back and clear yes, tokens only in `.env`, and `lab/check.py` (read only) before restarting the
+bridge. If no, leave the `lab` section out: everything else works without it.
+
 ## Rules while you work
 
 - `config.json`, `.env` and `bridge/data/` hold their settings and history. Git ignores them.

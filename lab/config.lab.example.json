@@ -1,0 +1,51 @@
+{
+  "lab": {
+    "prometheus": "http://127.0.0.1:9090",
+
+    "internet": { "source": "ping", "host": "1.1.1.1", "port": 443 },
+    "adguard": { "host": "adguard.example.local" },
+
+    "proxmox": [
+      { "id": "pve1", "label": "pve1", "host": "pve1.example.local", "node": "pve1", "token_env": "PVE1_TOKEN",
+        "fingerprint": "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99" }
+    ],
+
+    "services": [
+      { "id": "grafana", "label": "Grafana", "host": "server.example.local", "port": 3000, "on": "server" },
+      { "id": "jellyfin", "label": "Jellyfin", "host": "server.example.local", "port": 8096, "on": "server" },
+      { "id": "nas", "label": "NAS share", "host": "nas.example.local", "port": 445, "on": "nas" }
+    ],
+
+    "netmap": [
+      { "id": "internet", "label": "Internet", "host": "1.1.1.1", "port": 53, "parent": "" },
+      { "id": "router", "label": "Router", "host": "router.example.local", "port": 80, "parent": "internet" },
+      { "id": "pve1", "label": "pve1", "host": "pve1.example.local", "port": 8006, "parent": "router" },
+      { "id": "server", "label": "server", "host": "server.example.local", "port": 22, "parent": "pve1" },
+      { "id": "nas", "label": "NAS", "host": "nas.example.local", "port": 445, "parent": "router" }
+    ],
+
+    "links": {
+      "grafana": { "label": "Grafana", "url": "http://server.example.local:3000/" }
+    },
+
+    "buttons": [
+      { "id": "screenshot", "label": "Screenshot", "icon": "camera", "steps": [{ "screenshot": true }] },
+      { "id": "sleep30", "label": "Sleep 30", "icon": "moon", "steps": [{ "sleep": 30 }] },
+      { "id": "hdmi1", "label": "HDMI 1", "icon": "input", "steps": [{ "input": "HDMI 1" }] }
+    ],
+
+    "screenshots": { "targets": ["server"] },
+
+    "widgets": [
+      { "id": "internet", "type": "panel", "kind": "internet", "title": "Internet", "sizes": [[2, 1], [1, 1]], "note": "speed of the line, devices, AdGuard" },
+      { "id": "homelab", "type": "panel", "kind": "homelab", "title": "Homelab", "sizes": [[2, 1]], "note": "Proxmox · CPU, memory, LXC and VMs" },
+      { "id": "services", "type": "panel", "kind": "services", "title": "Services", "sizes": [[2, 1], [2, 2], [1, 1]], "note": "every service, up or down" },
+      { "id": "netmap", "type": "panel", "kind": "netmap", "title": "Network map", "sizes": [[2, 2]], "note": "the network as a map" }
+    ],
+    "default_layout": [
+      { "id": "internet", "x": 0, "y": 0, "w": 2, "h": 1 },
+      { "id": "homelab", "x": 0, "y": 1, "w": 2, "h": 1 },
+      { "id": "services", "x": 0, "y": 2, "w": 2, "h": 1 }
+    ]
+  }
+}

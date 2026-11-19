@@ -63,3 +63,6 @@ xcuserdata/
 # couch-tv-lab: per-TV recon output and debloat backups hold LAN details (SSID, MACs)
 lab/**/out-*/
 lab/**/backup-*/
+
+# couch-tv-lab: your own server for lab/deploy.sh
+lab/.deploy-host

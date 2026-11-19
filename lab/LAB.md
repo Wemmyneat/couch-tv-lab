@@ -95,13 +95,13 @@ Lab tab. The bridge computes each one (`bridge/lab.py`, `PANELS`); the TV and th
   {"id": "services", "type": "panel", "kind": "services", "title": "Services", "sizes": [[2, 1], [2, 2], [1, 1]]},
   {"id": "netmap",   "type": "panel", "kind": "netmap",   "title": "Network map", "sizes": [[2, 2]]}
 ],
-"services": [{"id": "immich", "label": "Immich", "host": "192.168.0.10", "port": 2283, "on": "wemserver"}],
-"netmap":   [{"id": "router", "label": "MTN 5G", "host": "192.168.0.1", "port": 80, "parent": "internet"}]
+"services": [{"id": "immich", "label": "Immich", "host": "server.example.local", "port": 2283, "on": "server"}],
+"netmap":   [{"id": "router", "label": "Router", "host": "router.example.local", "port": 80, "parent": "internet"}]
 ```
 
 | kind | What it shows |
 |---|---|
-| `internet` | the router's signal score, the same formula as the MTN router page (60% SINR from -5 to 25 dB, 40% RSRP from -120 to -70 dBm, on the 5G side when the router is on 5G), the network, live ↓ ↑ speed, and a column with devices on Wi-Fi and on Ethernet (the router's `mtn_device_online` by `interface`) and AdGuard: on, off, down, or unused when the router does not hand out its address. Set `lab.adguard` to `{"host": "<AdGuard address>"}`. No login: the bridge asks AdGuard's DNS for a known ad domain (`probe`, default doubleclick.net and pagead2.googlesyndication.com) and a blocked answer means on. "Off" can also mean the server is an unfiltered client in AdGuard |
+| `internet` | where it reads from is `lab.internet` (below): by default a ping score (how fast 1.1.1.1:443 answers), or a router's signal score, network, live ↓ ↑ speed, and a column with devices on Wi-Fi and on Ethernet, plus AdGuard: on, off, down, or unused when the router does not hand out its address. Set `lab.adguard` to `{"host": "<AdGuard address>"}`. No login: the bridge asks AdGuard's DNS for a known ad domain (`probe`, default doubleclick.net and pagead2.googlesyndication.com), and a blocked answer means on. "Off" can also mean the server is an unfiltered client in AdGuard |
 | `homelab` | every `lab.proxmox` node: CPU and memory rings, guests running |
 | `services` | a TCP check of each `lab.services` entry every 30 s; `on` names the `lab.netmap` node it runs on |
 | `netmap` | `lab.netmap` as a tree (`parent`), each node green or red, with how many of its services answer |
@@ -110,6 +110,22 @@ Lab tab. The bridge computes each one (`bridge/lab.py`, `PANELS`); the TV and th
 | `photos` | Immich photo and video counts; the `IMMICH_API_KEY` needs the `asset.statistics` permission |
 
 The phone's Lab tab reads the same panels from `GET /api/lab/overview`.
+
+### The internet widget's source: `lab.internet`
+```json
+"internet": {"source": "ping", "host": "1.1.1.1", "port": 443}
+"internet": {"source": "prometheus", "network": "Fibre", "queries": {
+  "down": "sum(rate(node_network_receive_bytes_total{device=\"wan0\"}[2m]))",
+  "up": "sum(rate(node_network_transmit_bytes_total{device=\"wan0\"}[2m]))", "online": "max(up{job=\"router\"})"}}
+"internet": {"source": "mtn"}
+```
+- `ping` (the default, needs nothing): the ring scores how fast a TCP connection to `host:port` opens (100 at
+  20 ms or less, 0 at 400 ms), and the widget shows the time.
+- `prometheus`: your own PromQL for any of `rsrp`, `sinr` (both: the ring is a signal score), `down`, `up`
+  (bytes per second), `devices`, `wifi`, `wired`, `online` (1 or 0), `dns_ok` (1 when the router hands out
+  AdGuard), and `tech` (a network type number; `$tech` in the other queries becomes `5g` at 5 and above,
+  else `lte`). `network` is a fixed text, or `{"query": ..., "label": ...}` to read it from a metric's label.
+- `mtn`: the preset for the mtn-router exporter (MTN/ZLT 5G routers). `queries` can override any of it.
 
 ## The remote's background at home
 While the TV shows its home screen, the phone remote wears the TV's own wallpaper: the TV home reports the
@@ -125,7 +141,7 @@ Upstream couch-tv answered every website (`Access-Control-Allow-Origin: *`), so 
 could press keys or read data through your browser. couch-tv-lab only answers:
 - **Host names it knows:** localhost, its own hostname and addresses, `bridge.host`, `bridge.fallback_hosts`, plus
   `lab.allowed_hosts`. Anything else gets 421; this stops DNS rebinding. **Add any name you open the remote by**,
-  e.g. a Tailscale name or an AdGuard rewrite: `"allowed_hosts": ["couch.home.arpa", "wemserver.tailnet.ts.net"]`.
+  e.g. a Tailscale name or an AdGuard rewrite: `"allowed_hosts": ["couch.example.local", "<your-server>.<tailnet>.ts.net"]`.
 - **Browser origins:** its own pages, the TV app's saved home (`http://home.tvos.invalid`), plus
   `lab.allowed_origins` (e.g. a Samsung or LG app's origin). Other sites get 403.
 - Clients that send no Origin (iOS Shortcuts, Hermes over MCP, curl) are unaffected.

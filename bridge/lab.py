@@ -536,13 +536,14 @@ async def render_widget(w):
 # ---------- panels: several live values packed into one widget ----------
 # {"type": "panel", "kind": <one of PANELS>} in lab.widgets. Each kind is computed here and sent finished:
 # the TV and the phone only draw it (rings, bars, dots, the map).
-#   internet  the router: signal score (the MTN page's own formula), network, live speed, devices
+#   internet  lab.internet: a ping score by default, or a router's signal score (the MTN page's own formula),
+#             network, live speed, devices on Wi-Fi and Ethernet, and AdGuard (lab.adguard)
 #   homelab   every lab.proxmox node: CPU and memory, guests running, uptime
 #   services  lab.services [{"id","label","host","port","on"}]: a TCP check of each, every 30 s
 #   netmap    lab.netmap [{"id","label","host","port","parent","icon"}]: the network as a tree, with each
 #             node's own check and how many lab.services run on it
-#   study     the DisplayOS hub's first study track: day of total, today's lesson
-#   today     the hub's counts: due today, overdue, habits left, reminders
+#   study     the hub source's (lab.hub_source) first study track: day of total, today's lesson
+#   today     the hub source's counts: due today, overdue, habits left, reminders (format: lab/SETUP-LAB.md)
 #   photos    Immich asset counts (the IMMICH_API_KEY needs the asset.statistics permission)
 def _probe_list(key):
     out = []
@@ -696,24 +697,95 @@ async def _promv(q, ttl=15):
         return None
 
 
+# lab.internet: where the internet widget reads from. Every field is optional; what is missing is left off.
+#   {"source": "ping"}  (the default)  connects to host:port (1.1.1.1:443) and scores how fast it answers
+#   {"source": "prometheus", "queries": {...}}  your own exporter: PromQL for any of the keys in INTERNET_KEYS
+#   {"source": "mtn"}  the preset for the mtn-router exporter (MTN/ZLT 5G routers); "queries" can override it
+# "network" is a fixed text, or {"query": ..., "label": ...} to read it from a label (e.g. the router's 5G/LTE).
+# "$tech" in a query is "5g" or "lte" from the "tech" query (a network type number, 5 and above is 5G).
+INTERNET_KEYS = ("tech", "rsrp", "sinr", "down", "up", "devices", "online", "wifi", "wired", "dns_ok")
+INTERNET_PRESETS = {"mtn": {
+    "tech": "max(mtn_network_type)",
+    "rsrp": 'max(mtn_signal_rsrp_dbm{tech="$tech"})', "sinr": 'max(mtn_signal_sinr_db{tech="$tech"})',
+    "down": "sum(rate(mtn_wan_rx_bytes_total[2m]))", "up": "sum(rate(mtn_wan_tx_bytes_total[2m]))",
+    "devices": "max(mtn_connected_devices)", "online": "max(mtn_up)",
+    "wifi": 'count(mtn_device_online{interface="wlan"} == 1) or vector(0)',
+    "wired": 'count(mtn_device_online{interface="eth"} == 1) or vector(0)',
+    "dns_ok": "max(mtn_dhcp_dns_matches_expected)",
+    "network": {"query": "mtn_network_info", "label": "network_type"}}}
+
+
+def _internet_conf():
+    c = LAB.get("internet") if isinstance(LAB.get("internet"), dict) else {}
+    src = c.get("source") if c.get("source") in ("ping", "prometheus", *INTERNET_PRESETS) else "ping"
+    q = dict(INTERNET_PRESETS.get(src, {}))
+    for k, v in (c.get("queries") or {}).items() if isinstance(c.get("queries"), dict) else ():
+        if k in INTERNET_KEYS and isinstance(v, str) and 0 < len(v) <= 400:
+            q[k] = v
+    net = c.get("network", q.get("network"))
+    if not (isinstance(net, str) and len(net) <= 24 or isinstance(net, dict) and isinstance(net.get("query"), str)
+            and len(net["query"]) <= 400 and isinstance(net.get("label"), str)):
+        net = None
+    host = c.get("host") if isinstance(c.get("host"), str) and re.fullmatch(r"[A-Za-z0-9.:-]{1,100}", c["host"]) else "1.1.1.1"
+    port = c.get("port") if isinstance(c.get("port"), int) and 0 < c["port"] < 65536 else 443
+    return {"source": src, "queries": {k: v for k, v in q.items() if k in INTERNET_KEYS}, "network": net, "host": host, "port": port}
+
+
+INTERNET = _internet_conf()
+
+
+async def _latency_ms(host, port):
+    """Milliseconds to open a TCP connection, or None when it fails. Cached 30 s."""
+    key = f"rtt:{host}:{port}"
+    hit = _cache.get(key)
+    if hit and hit[0] > time.time():
+        return hit[1]
+    t0 = time.monotonic()
+    ms = None
+    try:
+        _, w = await asyncio.wait_for(asyncio.open_connection(host, port), 3)
+        ms = round((time.monotonic() - t0) * 1000)
+        w.close()
+    except Exception:
+        pass
+    _cache[key] = (time.time() + 30, ms)
+    return ms
+
+
+def latency_score(ms):
+    """100 at 20 ms or less, 0 at 400 ms or more."""
+    return None if ms is None else round(100 - _lerp_pct(ms, 20, 400))
+
+
 async def panel_internet():
-    ntype, info = await asyncio.gather(_promv("max(mtn_network_type)"), _prom("mtn_network_info", 15))
-    tech = "5g" if (ntype or 0) >= 5 else "lte"   # 5G NSA rides on LTE; the router page scores the NR side
-    rsrp, sinr, down, up, devices, online = await asyncio.gather(
-        _promv(f'max(mtn_signal_rsrp_dbm{{tech="{tech}"}})'), _promv(f'max(mtn_signal_sinr_db{{tech="{tech}"}})'),
-        _promv("sum(rate(mtn_wan_rx_bytes_total[2m]))"), _promv("sum(rate(mtn_wan_tx_bytes_total[2m]))"),
-        _promv("max(mtn_connected_devices)"), _promv("max(mtn_up)"))
-    wifi, wired, dns_ok, ag = await asyncio.gather(
-        _promv('count(mtn_device_online{interface="wlan"} == 1) or vector(0)'),
-        _promv('count(mtn_device_online{interface="eth"} == 1) or vector(0)'),
-        _promv("max(mtn_dhcp_dns_matches_expected)"), adguard_state())
-    score = signal_score(sinr, rsrp)
-    return {"score": score, "label": score_label(score), "network": str(info[0]["metric"].get("network_type", "–"))[:24] if info else "–",
-            "rsrp": rsrp, "sinr": sinr, "down": _rate(down), "up": _rate(up),
-            "devices": int(devices) if devices is not None else None, "online": online == 1,
-            "wifi": int(wifi) if wifi is not None else None, "wired": int(wired) if wired is not None else None,
+    c, ag = INTERNET, None
+    if c["source"] == "ping":
+        ms, ag = await asyncio.gather(_latency_ms(c["host"], c["port"]), adguard_state())
+        score = latency_score(ms)
+        return {"score": score, "label": score_label(score) if ms is not None else "offline",
+                "network": c["network"] if isinstance(c["network"], str) else (f"{ms} ms" if ms is not None else "Offline"),
+                "latency_ms": ms, "down": "–", "up": "–", "devices": None, "online": ms is not None,
+                "wifi": None, "wired": None, "adguard": ag, "router_dns": None}
+    q = c["queries"]
+    tech = "lte"
+    if "tech" in q:
+        tech = "5g" if (await _promv(q["tech"]) or 0) >= 5 else "lte"   # 5G NSA rides on LTE; score the NR side
+    keys = [k for k in INTERNET_KEYS if k in q and k != "tech"]
+    vals = await asyncio.gather(*(_promv(q[k].replace("$tech", tech)) for k in keys))
+    v = dict(zip(keys, vals))
+    net, ag = c["network"], await adguard_state()
+    if isinstance(net, dict):
+        info = await _prom(net["query"], 15)
+        net = str(info[0]["metric"].get(net["label"], "–"))[:24] if info else "–"
+    score = signal_score(v.get("sinr"), v.get("rsrp")) if v.get("sinr") is not None and v.get("rsrp") is not None else None
+    num = lambda k: int(v[k]) if v.get(k) is not None else None  # noqa: E731
+    online = v.get("online")
+    return {"score": score, "label": score_label(score) if score is not None else ("online" if online != 0 else "offline"),
+            "network": net or "Internet", "rsrp": v.get("rsrp"), "sinr": v.get("sinr"),
+            "down": _rate(v.get("down")) if "down" in v else "–", "up": _rate(v.get("up")) if "up" in v else "–",
+            "devices": num("devices"), "online": online is None or online == 1, "wifi": num("wifi"), "wired": num("wired"),
             # adguard: on / off / down; router_dns: the router hands out AdGuard's address (None if not known)
-            "adguard": ag, "router_dns": None if dns_ok is None else dns_ok == 1}
+            "adguard": ag, "router_dns": None if v.get("dns_ok") is None else v["dns_ok"] == 1}
 
 
 async def panel_homelab():

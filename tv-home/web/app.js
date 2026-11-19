@@ -662,7 +662,7 @@
       var ring = labRing(w.score, labScoreColour(w.score), w.score == null ? "–" : w.score, "big");
       if (!wide) return ring + '<div class="pv"><b>' + esc(w.network) + "</b><span>" + esc(w.label) + "</span></div>";
       return ring + '<div class="pv"><small>Internet · ' + esc(w.label) + "</small><b>" + esc(w.network) + "</b>" +
-        '<span class="speeds"><i class="dn">↓</i> ' + esc(w.down) + ' <i class="up">↑</i> ' + esc(w.up) + "</span></div>" +
+        (w.down !== "–" || w.up !== "–" ? '<span class="speeds"><i class="dn">↓</i> ' + esc(w.down) + ' <i class="up">↑</i> ' + esc(w.up) + "</span>" : "") + "</div>" +
         labNetSide(w);
     }
     if (w.kind === "homelab") {
