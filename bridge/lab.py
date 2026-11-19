@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import re
+import struct
 import time
 from datetime import datetime, timezone
 
@@ -567,6 +568,101 @@ async def _probe(host, port):
     return up
 
 
+# ---- AdGuard: is it blocking? ----
+# lab.adguard {"host": "<AdGuard address>", "probe": ["doubleclick.net", ...]}. No login: the bridge asks AdGuard's DNS
+# for a known ad domain. A blocked answer (0.0.0.0 / ::, NXDOMAIN or REFUSED) means protection is on; a real
+# address means it is off (or this server is an unfiltered client); no answer means AdGuard is down.
+_AG = LAB.get("adguard") if isinstance(LAB.get("adguard"), dict) else {}
+ADGUARD_HOST = _AG.get("host") if isinstance(_AG.get("host"), str) and re.fullmatch(r"[A-Za-z0-9.:-]{1,64}", _AG.get("host") or "") else None
+ADGUARD_PROBE = [d for d in (_AG.get("probe") or ["doubleclick.net", "pagead2.googlesyndication.com"])
+                 if isinstance(d, str) and re.fullmatch(r"[a-z0-9.-]{1,120}", d)][:3]
+
+
+def dns_query(name, qid):
+    """A plain DNS question for the A record of name."""
+    q = b"".join(bytes([len(p)]) + p.encode() for p in name.strip(".").split(".")) + b"\0"
+    return struct.pack(">HHHHHH", qid, 0x0100, 1, 0, 0, 0) + q + struct.pack(">HH", 1, 1)
+
+
+def dns_blocked(resp, qid):
+    """True if the answer is a blocker's (NXDOMAIN, REFUSED, or only 0.0.0.0 / :: addresses), False if it gives a
+    real address, None if it is not an answer to our question."""
+    if len(resp) < 12:
+        return None
+    rid, flags, qd, an = struct.unpack(">HHHH", resp[:8])
+    if rid != qid or not flags & 0x8000:
+        return None
+    rcode = flags & 0xF
+    if rcode in (3, 5):
+        return True
+    if rcode:
+        return None
+    i = 12
+
+    def skip(i):
+        while i < len(resp):
+            n = resp[i]
+            if n & 0xC0 == 0xC0:
+                return i + 2
+            if n == 0:
+                return i + 1
+            i += n + 1
+        raise ValueError("truncated")
+    try:
+        for _ in range(qd):
+            i = skip(i) + 4
+        addrs = []
+        for _ in range(an):
+            i = skip(i)
+            typ, _cls, _ttl, ln = struct.unpack(">HHIH", resp[i:i + 10])
+            rd = resp[i + 10:i + 10 + ln]
+            if len(rd) != ln:
+                raise ValueError("truncated")
+            i += 10 + ln
+            if typ in (1, 28):
+                addrs.append(rd)
+    except (ValueError, struct.error):
+        return None
+    if not addrs:
+        return True   # NOERROR with no address: AdGuard's "empty response" mode
+    return all(not any(a) for a in addrs)
+
+
+async def _dns_ask(host, name, timeout=2.0):
+    qid = int.from_bytes(os.urandom(2), "big")
+    loop = asyncio.get_running_loop()
+    got = loop.create_future()
+
+    class P(asyncio.DatagramProtocol):
+        def datagram_received(self, data, addr):
+            if not got.done():
+                got.set_result(data)
+
+        def error_received(self, exc):
+            if not got.done():
+                got.set_exception(exc)
+    tr, _ = await loop.create_datagram_endpoint(P, remote_addr=(host, 53))
+    try:
+        tr.sendto(dns_query(name, qid))
+        return dns_blocked(await asyncio.wait_for(got, timeout), qid)
+    finally:
+        tr.close()
+
+
+async def adguard_state():
+    """"on", "off", "down", or None when no lab.adguard host is set. Cached 60 s."""
+    if not ADGUARD_HOST:
+        return None
+    hit = _cache.get("adguard")
+    if hit and hit[0] > time.time():
+        return hit[1]
+    res = await asyncio.gather(*(_dns_ask(ADGUARD_HOST, d) for d in ADGUARD_PROBE), return_exceptions=True)
+    ans = [r for r in res if isinstance(r, bool)]
+    state = "down" if not ans else "on" if any(ans) else "off"
+    _cache["adguard"] = (time.time() + 60, state)
+    return state
+
+
 def _lerp_pct(v, lo, hi):
     return None if v is None else max(0.0, min(1.0, (v - lo) / (hi - lo))) * 100
 
@@ -607,10 +703,17 @@ async def panel_internet():
         _promv(f'max(mtn_signal_rsrp_dbm{{tech="{tech}"}})'), _promv(f'max(mtn_signal_sinr_db{{tech="{tech}"}})'),
         _promv("sum(rate(mtn_wan_rx_bytes_total[2m]))"), _promv("sum(rate(mtn_wan_tx_bytes_total[2m]))"),
         _promv("max(mtn_connected_devices)"), _promv("max(mtn_up)"))
+    wifi, wired, dns_ok, ag = await asyncio.gather(
+        _promv('count(mtn_device_online{interface="wlan"} == 1) or vector(0)'),
+        _promv('count(mtn_device_online{interface="eth"} == 1) or vector(0)'),
+        _promv("max(mtn_dhcp_dns_matches_expected)"), adguard_state())
     score = signal_score(sinr, rsrp)
     return {"score": score, "label": score_label(score), "network": str(info[0]["metric"].get("network_type", "–"))[:24] if info else "–",
             "rsrp": rsrp, "sinr": sinr, "down": _rate(down), "up": _rate(up),
-            "devices": int(devices) if devices is not None else None, "online": online == 1}
+            "devices": int(devices) if devices is not None else None, "online": online == 1,
+            "wifi": int(wifi) if wifi is not None else None, "wired": int(wired) if wired is not None else None,
+            # adguard: on / off / down; router_dns: the router hands out AdGuard's address (None if not known)
+            "adguard": ag, "router_dns": None if dns_ok is None else dns_ok == 1}
 
 
 async def panel_homelab():
@@ -624,6 +727,8 @@ async def panel_homelab():
         nodes.append({"id": pid, "label": sm["label"], "online": True, "cpu": sm["cpu"],
                       "mem": round(100 * sm["mem_gb"] / sm["memtotal_gb"]) if sm["memtotal_gb"] else None,
                       "mem_text": f"{sm['mem_gb']}/{sm['memtotal_gb']} GB", "guests": len(run), "guests_total": len(sm["guests"]),
+                      # running guests by kind: LXC containers ("ct") and virtual machines ("vm")
+                      "cts": sum(1 for g in run if g["kind"] == "ct"), "vms": sum(1 for g in run if g["kind"] == "vm"),
                       "uptime": f"{sm['uptime_h'] // 24}d {sm['uptime_h'] % 24}h" if sm["uptime_h"] >= 24 else f"{sm['uptime_h']}h"})
     return {"nodes": nodes}
 

@@ -251,7 +251,14 @@ function ServicesSheet({ open, items, onClose }) {
   );
 }
 
-export function LabPage({ reach, active, onSaid }) {
+// Running guests by kind ("2 LXC · 1 VM"), from the bridge's cts/vms; older bridges send only a total.
+function guestText(n) {
+  if (n.cts == null) return `${n.guests}/${n.guests_total} running`;
+  const parts = [n.cts && `${n.cts} LXC`, n.vms && `${n.vms} VM`].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'nothing running';
+}
+
+export function LabPage({ reach, active, onSaid, tvName }) {
   const [d, setD] = useState(null);
   const [view, setView] = useState('home');
   const [busy, setBusy] = useState(null);
@@ -272,7 +279,7 @@ export function LabPage({ reach, active, onSaid }) {
       <div className="lab">
         <div className="lab-top"><button className="round glass small" aria-label="Back to Lab" onClick={() => { tick(); setView('home'); }}><Ic.Back size={18} /></button>
           <h1 className="lab-title">{view === 'widgets' ? 'TV widgets' : 'Screenshots'}</h1></div>
-        {view === 'widgets' ? <WidgetEditor onSaid={onSaid} /> : <Shots onSaid={onSaid} />}
+        {view === 'widgets' ? <WidgetEditor onSaid={onSaid} tvName={tvName} /> : <Shots onSaid={onSaid} />}
       </div>
     );
   }
@@ -297,7 +304,8 @@ export function LabPage({ reach, active, onSaid }) {
           <small>Internet</small>
           <b>{net?.ok ? net.network : (d ? 'Router not answering' : '…')}</b>
           {net?.ok && <span className="speeds"><i className="dn">↓</i> {net.down} <i className="up">↑</i> {net.up}</span>}
-          {net?.ok && net.devices != null && <span>{net.devices} devices connected</span>}
+          {net?.ok && (net.wifi != null || net.devices != null) && <span>{net.wifi != null ? `${net.wifi} on Wi-Fi · ${net.wired} wired` : `${net.devices} devices connected`}</span>}
+          {net?.ok && net.adguard && <span className={`ag ${net.adguard}`}>AdGuard {net.adguard === 'on' && net.router_dns === false ? 'on, but the router does not use it' : { on: 'blocking ads', off: 'not blocking', down: 'not answering' }[net.adguard]}</span>}
         </div>
       </section>
 
@@ -316,7 +324,7 @@ export function LabPage({ reach, active, onSaid }) {
           <Row key={n.id} onClick={() => setHost({ id: n.id, label: n.label, pve: true, state: n.online ? 'ok' : 'down' })}>
             {n.online ? (<span className="lrings"><Ring pct={n.cpu} colour={loadColour(n.cpu)} size={36}>{n.cpu}</Ring><Ring pct={n.mem} colour={loadColour(n.mem)} size={36}>{n.mem}</Ring></span>)
               : <i className="dot down" />}
-            <span className="ltext"><b>{n.label}</b><small>{n.online ? `CPU ${n.cpu}% · RAM ${n.mem_text} · ${n.guests}/${n.guests_total} guests · up ${n.uptime}` : 'not answering'}</small></span>
+            <span className="ltext"><b>{n.label}</b><small>{n.online ? `CPU ${n.cpu}% · RAM ${n.mem_text} · ${guestText(n)} · up ${n.uptime}` : 'not answering'}</small></span>
           </Row>
         ))}
         {sv?.ok && (
@@ -369,7 +377,7 @@ function firstSpot(items, w, h, cols, rows, id) {
   return null;
 }
 
-export function WidgetEditor({ onSaid }) {
+export function WidgetEditor({ onSaid, tvName }) {
   const [cat, setCat] = useState(null);
   const [grid, setGrid] = useState({ cols: 2, rows: 4 });
   const [items, setItems] = useState(null);
@@ -412,7 +420,7 @@ export function WidgetEditor({ onSaid }) {
   for (let y = 0; y < grid.rows; y++) for (let x = 0; x < grid.cols; x++) if (!taken.has(`${x},${y}`)) empty.push({ x, y });
   return (
     <div className="wedit">
-      <p className="lab-sub">Tap a widget, then move it, change its size or take it off. Wemmyneat · {grid.cols} × {grid.rows}</p>
+      <p className="lab-sub">Tap a widget, then move it, change its size or take it off. {tvName ? `${tvName} · ` : ''}{grid.cols} × {grid.rows}</p>
       <div className="wgrid" style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${grid.rows}, 64px)` }}>
         {empty.map((e) => <div key={`e${e.x},${e.y}`} className="wcell" style={{ gridColumn: e.x + 1, gridRow: e.y + 1 }} />)}
         {items.map((i) => (

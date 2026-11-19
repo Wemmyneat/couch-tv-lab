@@ -614,26 +614,69 @@
     });
     return '<svg class="netmap" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" aria-hidden="true">' + lines + dots + "</svg>";
   }
+  // Widget icons: Iconsax "Bold" (https://iconsax.io, MIT licence, via the iconsax-react package),
+  // filled in the text colour, so short counts can stand without long words beside them.
+  // No emoji: they render differently on every TV.
+  var LAB_ICONS = {
+    // wired: an Ethernet port, drawn in the same filled style (Iconsax has no Ethernet icon)
+    eth: '<path fill-rule="evenodd" d="M7.5 3h9A4.5 4.5 0 0 1 21 7.5v9a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 16.5v-9A4.5 4.5 0 0 1 7.5 3ZM7 8h10v7h-2.5v2h-5v-2H7Z"/><path d="M9 9.5h1.2v2.5H9zM11.4 9.5h1.2v2.5h-1.2zM13.8 9.5H15v2.5h-1.2z"/>',
+    shon: '<path d="m18.54 4.12-5.5-2.06c-.57-.21-1.5-.21-2.07 0l-5.5 2.06c-1.06.4-1.92 1.64-1.92 2.77v8.1c0 .81.53 1.88 1.18 2.36l5.5 4.11c.97.73 2.56.73 3.53 0l5.5-4.11c.65-.49 1.18-1.55 1.18-2.36v-8.1c.01-1.13-.85-2.37-1.9-2.77Zm-3.06 5.6-4.3 4.3c-.15.15-.34.22-.53.22s-.38-.07-.53-.22l-1.6-1.62a.754.754 0 0 1 0-1.06c.29-.29.77-.29 1.06 0l1.08 1.08 3.77-3.77c.29-.29.77-.29 1.06 0 .29.29.29.78-.01 1.07Z"/>',
+    shoff: '<path d="M19.36 4.64 5.83 18.17l-1.1-.82c-.65-.49-1.18-1.55-1.18-2.37V6.89c0-1.13.86-2.37 1.91-2.77l5.5-2.06c.57-.21 1.51-.21 2.08 0l5.5 2.06c.29.11.57.29.82.52ZM20.449 14.979c0 .82-.53 1.88-1.18 2.37l-5.5 4.11c-.98.72-2.56.72-3.54 0l-1.76-1.31c-.49-.36-.54-1.08-.11-1.51l10.38-10.38c.63-.63 1.71-.18 1.71.71v6.01Z"/><path d="M21.769 2.229c-.3-.3-.79-.3-1.09 0l-18.45 18.46c-.3.3-.3.79 0 1.09a.758.758 0 0 0 1.08-.01l18.46-18.46c.31-.3.31-.78 0-1.08Z"/>',
+    shdown: '<path d="m18.54 4.12-5.5-2.06c-.57-.21-1.5-.21-2.07 0l-5.5 2.06c-1.06.4-1.92 1.64-1.92 2.77v8.1c0 .81.53 1.88 1.18 2.36l5.5 4.11c.97.73 2.56.73 3.53 0l5.5-4.11c.65-.49 1.18-1.55 1.18-2.36v-8.1c.01-1.13-.85-2.37-1.9-2.77Zm-3.86 9.85c-.15.15-.34.22-.53.22s-.38-.07-.53-.22l-1.59-1.59-1.64 1.64c-.15.15-.34.22-.53.22s-.38-.07-.53-.22a.754.754 0 0 1 0-1.06l1.64-1.64-1.6-1.6a.754.754 0 0 1 0-1.06c.29-.29.77-.29 1.06 0l1.59 1.59 1.55-1.55c.29-.29.77-.29 1.06 0 .29.29.29.77 0 1.06l-1.55 1.55 1.59 1.59c.3.3.3.77.01 1.07Z"/>',
+    ct: '<path d="m20.208 7.821-7.7 4.46c-.31.18-.7.18-1.02 0l-7.7-4.46c-.55-.32-.69-1.07-.27-1.54.29-.33.62-.6.97-.79l5.42-3c1.16-.65 3.04-.65 4.2 0l5.42 3c.35.19.68.47.97.79.4.47.26 1.22-.29 1.54ZM11.43 14.139v6.82c0 .76-.77 1.26-1.45.93-2.06-1.01-5.53-2.9-5.53-2.9-1.22-.69-2.22-2.43-2.22-3.86v-5.16c0-.79.83-1.29 1.51-.9l7.19 4.17c.3.19.5.53.5.9ZM12.57 14.139v6.82c0 .76.77 1.26 1.45.93 2.06-1.01 5.53-2.9 5.53-2.9 1.22-.69 2.22-2.43 2.22-3.86v-5.16c0-.79-.83-1.29-1.51-.9l-7.19 4.17c-.3.19-.5.53-.5.9Z"/>',
+    vm: '<path d="M17.56 2H6.41C3.98 2 2 3.98 2 6.41v6.7a4.41 4.41 0 0 0 4.41 4.41h3.84c.55 0 1 .45 1 1v.97c0 .55-.45 1-1 1H7.83a.755.755 0 0 0 0 1.51h8.35c.41 0 .75-.34.75-.75s-.34-.75-.75-.75h-2.42c-.55 0-1-.45-1-1v-.97c0-.55.45-1 1-1h3.81a4.41 4.41 0 0 0 4.41-4.41v-6.7C21.97 3.98 19.99 2 17.56 2Z"/>',
+    wifi: '<path d="M19.09 12.588c-.16 0-.32-.05-.46-.16-4.03-3.11-9.24-3.11-13.27 0-.33.25-.8.19-1.05-.13-.25-.33-.19-.8.13-1.05 4.59-3.55 10.52-3.55 15.1 0 .33.25.39.72.13 1.05-.13.19-.35.29-.58.29Z"/><path d="M22 9.108c-.16 0-.32-.05-.46-.16-5.8-4.48-13.29-4.48-19.08 0-.33.25-.8.19-1.05-.13a.74.74 0 0 1 .13-1.05c6.35-4.91 14.56-4.91 20.92 0 .33.25.39.72.13 1.05-.14.19-.37.29-.59.29ZM17.21 16.241c-.16 0-.32-.05-.46-.16-2.88-2.23-6.61-2.23-9.5 0-.33.25-.8.19-1.05-.13-.25-.33-.19-.8.13-1.05 3.44-2.66 7.89-2.66 11.33 0 .33.25.39.72.13 1.05a.72.72 0 0 1-.58.29ZM14.6 19.9c-.16 0-.32-.05-.46-.16-1.3-1.01-2.99-1.01-4.29 0-.33.25-.8.19-1.05-.13-.25-.33-.19-.8.13-1.05 1.86-1.44 4.26-1.44 6.12 0 .33.25.39.72.13 1.05a.72.72 0 0 1-.58.29Z"/>',
+    book: '<path d="M22 4.85v11.89c0 .97-.79 1.86-1.76 1.98l-.31.04c-1.64.22-3.95.9-5.81 1.68-.65.27-1.37-.22-1.37-.93V5.6c0-.37.21-.71.54-.89 1.83-.99 4.6-1.87 6.48-2.03h.06c1.2 0 2.17.97 2.17 2.17ZM10.708 4.71c-1.83-.99-4.6-1.87-6.48-2.03h-.07c-1.2 0-2.17.97-2.17 2.17v11.89c0 .97.79 1.86 1.76 1.98l.31.04c1.64.22 3.95.9 5.81 1.68.65.27 1.37-.22 1.37-.93V5.6a1 1 0 0 0-.53-.89Zm-5.71 3.03h2.25a.749.749 0 1 1 0 1.5h-2.25a.749.749 0 1 1 0-1.5Zm3 4.5h-3a.749.749 0 1 1 0-1.5h3a.749.749 0 1 1 0 1.5Z"/>',
+    server: '<path d="M19.32 2H4.68C3.21 2 2 3.21 2 4.68v2.63C2 8.79 3.21 10 4.68 10h14.63C20.79 10 22 8.79 22 7.32V4.68C22 3.21 20.79 2 19.32 2ZM6.75 7c0 .41-.34.75-.75.75s-.75-.34-.75-.75V5c0-.41.34-.75.75-.75s.75.34.75.75v2Zm4 0c0 .41-.34.75-.75.75s-.75-.34-.75-.75V5c0-.41.34-.75.75-.75s.75.34.75.75v2ZM18 6.75h-4c-.41 0-.75-.34-.75-.75s.34-.75.75-.75h4c.41 0 .75.34.75.75s-.34.75-.75.75ZM19.32 14H4.68C3.21 14 2 15.21 2 16.68v2.63C2 20.79 3.21 22 4.68 22h14.63c1.48 0 2.68-1.21 2.68-2.68v-2.63A2.68 2.68 0 0 0 19.32 14ZM6.75 19c0 .41-.34.75-.75.75s-.75-.34-.75-.75v-2c0-.41.34-.75.75-.75s.75.34.75.75v2Zm4 0c0 .41-.34.75-.75.75s-.75-.34-.75-.75v-2c0-.41.34-.75.75-.75s.75.34.75.75v2Zm7.25-.25h-4c-.41 0-.75-.34-.75-.75s.34-.75.75-.75h4c.41 0 .75.34.75.75s-.34.75-.75.75Z"/>',
+    cal: '<path d="M16.75 3.56V2c0-.41-.34-.75-.75-.75s-.75.34-.75.75v1.5h-6.5V2c0-.41-.34-.75-.75-.75s-.75.34-.75.75v1.56c-2.7.25-4.01 1.86-4.21 4.25-.02.29.22.53.5.53h16.92c.29 0 .53-.25.5-.53-.2-2.39-1.51-4-4.21-4.25ZM20 9.84H4c-.55 0-1 .45-1 1V17c0 3 1.5 5 5 5h8c3.5 0 5-2 5-5v-6.16c0-.55-.45-1-1-1ZM9.21 18.21c-.05.04-.1.09-.15.12-.06.04-.12.07-.18.09-.06.03-.12.05-.18.06-.07.01-.13.02-.2.02-.13 0-.26-.03-.38-.08-.13-.05-.23-.12-.33-.21-.18-.19-.29-.45-.29-.71 0-.26.11-.52.29-.71.1-.09.2-.16.33-.21.18-.08.38-.1.58-.06.06.01.12.03.18.06.06.02.12.05.18.09l.15.12c.18.19.29.45.29.71 0 .26-.11.52-.29.71Zm0-3.5c-.19.18-.45.29-.71.29-.26 0-.52-.11-.71-.29-.18-.19-.29-.45-.29-.71 0-.26.11-.52.29-.71.28-.28.72-.37 1.09-.21.13.05.24.12.33.21.18.19.29.45.29.71 0 .26-.11.52-.29.71Zm3.5 3.5c-.19.18-.45.29-.71.29-.26 0-.52-.11-.71-.29-.18-.19-.29-.45-.29-.71 0-.26.11-.52.29-.71.37-.37 1.05-.37 1.42 0 .18.19.29.45.29.71 0 .26-.11.52-.29.71Zm0-3.5-.15.12c-.06.04-.12.07-.18.09-.06.03-.12.05-.18.06-.07.01-.13.02-.2.02-.26 0-.52-.11-.71-.29-.18-.19-.29-.45-.29-.71 0-.26.11-.52.29-.71.09-.09.2-.16.33-.21.37-.16.81-.07 1.09.21.18.19.29.45.29.71 0 .26-.11.52-.29.71Zm3.5 3.5c-.19.18-.45.29-.71.29-.26 0-.52-.11-.71-.29-.18-.19-.29-.45-.29-.71 0-.26.11-.52.29-.71.37-.37 1.05-.37 1.42 0 .18.19.29.45.29.71 0 .26-.11.52-.29.71Zm0-3.5-.15.12c-.06.04-.12.07-.18.09-.06.03-.12.05-.18.06-.07.01-.14.02-.2.02-.26 0-.52-.11-.71-.29-.18-.19-.29-.45-.29-.71 0-.26.11-.52.29-.71.1-.09.2-.16.33-.21.18-.08.38-.1.58-.06.06.01.12.03.18.06.06.02.12.05.18.09l.15.12c.18.19.29.45.29.71 0 .26-.11.52-.29.71Z"/>',
+    alert: '<path d="M21.76 15.92 15.36 4.4C14.5 2.85 13.31 2 12 2s-2.5.85-3.36 2.4l-6.4 11.52c-.81 1.47-.9 2.88-.25 3.99.65 1.11 1.93 1.72 3.61 1.72h12.8c1.68 0 2.96-.61 3.61-1.72.65-1.11.56-2.53-.25-3.99ZM11.25 9c0-.41.34-.75.75-.75s.75.34.75.75v5c0 .41-.34.75-.75.75s-.75-.34-.75-.75V9Zm1.46 8.71-.15.12c-.06.04-.12.07-.18.09-.06.03-.12.05-.19.06-.06.01-.13.02-.19.02s-.13-.01-.2-.02a.636.636 0 0 1-.18-.06.757.757 0 0 1-.18-.09l-.15-.12c-.18-.19-.29-.45-.29-.71 0-.26.11-.52.29-.71l.15-.12c.06-.04.12-.07.18-.09.06-.03.12-.05.18-.06.13-.03.27-.03.39 0 .07.01.13.03.19.06.06.02.12.05.18.09l.15.12c.18.19.29.45.29.71 0 .26-.11.52-.29.71Z"/>',
+    check: '<path d="M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10 10-4.49 10-10S17.51 2 12 2Zm4.78 7.7-5.67 5.67a.75.75 0 0 1-1.06 0l-2.83-2.83a.754.754 0 0 1 0-1.06c.29-.29.77-.29 1.06 0l2.3 2.3 5.14-5.14c.29-.29.77-.29 1.06 0 .29.29.29.76 0 1.06Z"/>',
+    bell: '<path d="m19.34 14.49-1-1.66c-.21-.37-.4-1.07-.4-1.48V8.82a5.91 5.91 0 0 0-3.37-5.33A2.926 2.926 0 0 0 11.99 2c-1.09 0-2.07.59-2.59 1.52-1.95.97-3.3 2.98-3.3 5.3v2.53c0 .41-.19 1.11-.4 1.47l-1.01 1.67c-.4.67-.49 1.41-.24 2.09.24.67.81 1.19 1.55 1.44 1.94.66 3.98.98 6.02.98 2.04 0 4.08-.32 6.02-.97.7-.23 1.24-.76 1.5-1.45s.19-1.45-.2-2.09ZM14.83 20.01A3.014 3.014 0 0 1 12 22c-.79 0-1.57-.32-2.12-.89-.32-.3-.56-.7-.7-1.11.13.02.26.03.4.05.23.03.47.06.71.08.57.05 1.15.08 1.73.08.57 0 1.14-.03 1.7-.08.21-.02.42-.03.62-.06l.49-.06Z"/>',
+    image: '<path d="m2.58 19.011-.02.02c-.27-.59-.44-1.26-.51-2 .07.73.26 1.39.53 1.98ZM9.001 10.381a2.38 2.38 0 1 0 0-4.76 2.38 2.38 0 0 0 0 4.76Z"/><path d="M16.19 2H7.81C4.17 2 2 4.17 2 7.81v8.38c0 1.09.19 2.04.56 2.84.86 1.9 2.7 2.97 5.25 2.97h8.38c3.64 0 5.81-2.17 5.81-5.81V7.81C22 4.17 19.83 2 16.19 2Zm4.18 10.5c-.78-.67-2.04-.67-2.82 0l-4.16 3.57c-.78.67-2.04.67-2.82 0l-.34-.28c-.71-.62-1.84-.68-2.64-.14l-3.74 2.51c-.22-.56-.35-1.21-.35-1.97V7.81c0-2.82 1.49-4.31 4.31-4.31h8.38c2.82 0 4.31 1.49 4.31 4.31v4.8l-.13-.11Z"/>'
+  };
+  function labIcon(name, label) {
+    return '<svg class="ic" viewBox="0 0 24 24" role="img" aria-label="' + esc(label || name) + '">' + (LAB_ICONS[name] || "") + "</svg>";
+  }
+  // "count + icon" pairs, only the ones above zero ("idle" when none are)
+  function labCounts(pairs) {
+    var out = pairs.filter(function (p) { return p[0]; }).map(function (p) { return '<em class="cnt">' + labIcon(p[1], p[2]) + esc(p[0]) + "</em>"; });
+    return out.length ? out.join("") : "idle";
+  }
+  // The internet widget's right-hand column: devices on Wi-Fi, devices on cable, and AdGuard.
+  function labNetSide(w) {
+    var rows = "";
+    if (w.wifi != null) rows += '<em class="cnt">' + labIcon("wifi", "on Wi-Fi") + esc(w.wifi) + "</em>";
+    if (w.wired != null) rows += '<em class="cnt">' + labIcon("eth", "on Ethernet") + esc(w.wired) + "</em>";
+    if (w.wifi == null && w.wired == null && w.devices != null) rows += '<em class="cnt">' + labIcon("wifi", "devices") + esc(w.devices) + "</em>";
+    if (w.adguard) {
+      // on, but the router does not hand AdGuard out: devices are not using it
+      var st = w.adguard === "on" && w.router_dns === false ? "unused" : w.adguard;
+      var txt = { on: "On", off: "Off", down: "Down", unused: "Unused" }[st];
+      rows += '<em class="cnt ag ' + st + '">' + labIcon(st === "on" ? "shon" : st === "down" ? "shdown" : "shoff", "AdGuard") + txt + "</em>";
+    }
+    return rows ? '<div class="side">' + rows + "</div>" : "";
+  }
   function labPanel(w, it) {
     var wide = it.w > 1, tall = it.h > 1;
     if (w.kind === "internet") {
       var ring = labRing(w.score, labScoreColour(w.score), w.score == null ? "–" : w.score, "big");
       if (!wide) return ring + '<div class="pv"><b>' + esc(w.network) + "</b><span>" + esc(w.label) + "</span></div>";
       return ring + '<div class="pv"><small>Internet · ' + esc(w.label) + "</small><b>" + esc(w.network) + "</b>" +
-        '<span class="speeds"><i class="dn">↓</i> ' + esc(w.down) + ' <i class="up">↑</i> ' + esc(w.up) +
-        (w.devices != null ? " · " + esc(w.devices) + " devices" : "") + "</span></div>";
+        '<span class="speeds"><i class="dn">↓</i> ' + esc(w.down) + ' <i class="up">↑</i> ' + esc(w.up) + "</span></div>" +
+        labNetSide(w);
     }
     if (w.kind === "homelab") {
       return '<div class="nodes">' + (w.nodes || []).map(function (n) {
         if (!n.online) return '<div class="node off"><small>' + esc(n.label) + "</small><b>offline</b></div>";
         return '<div class="node"><div class="ring-col">' + labRing(n.cpu, labLoadColour(n.cpu), esc(n.cpu)) + '<span class="ring-label">CPU</span></div>' +
           '<div class="ring-col">' + labRing(n.mem, labLoadColour(n.mem), esc(n.mem)) + '<span class="ring-label">RAM</span></div>' +
-          '<div class="pv"><b>' + esc(n.label) + "</b><span>" + esc(n.guests) + (n.guests === 1 ? " guest" : " guests") + "</span></div></div>";
+          '<div class="pv"><b>' + esc(n.label) + '</b><span class="cnts">' +
+          (n.cts == null ? esc(n.guests) + " on" : labCounts([[n.cts, "ct", "LXC containers"], [n.vms, "vm", "virtual machines"]])) + "</span></div></div>";
       }).join("") + "</div>";
     }
     if (w.kind === "services") {
       var down = (w.items || []).filter(function (x) { return !x.ok; });
-      var head = '<small>Services</small><b class="' + (down.length ? "warn" : "") + '">' + w.up + "<i>/" + w.total + "</i></b>";
+      var head = '<small>' + labIcon("server", "services") + ' Services</small><b class="' + (down.length ? "warn" : "") + '">' + w.up + "<i>/" + w.total + "</i></b>";
       if (tall) return head + '<ul class="cols">' + (w.items || []).map(function (x) {
         return '<li><i class="dot ' + (x.ok ? "up" : "down") + '"></i>' + esc(x.label) + "</li>"; }).join("") + "</ul>";
       var dots = '<span class="dots">' + (w.items || []).map(function (x) { return '<i class="dot ' + (x.ok ? "up" : "down") + '"></i>'; }).join("") + "</span>";
@@ -643,17 +686,21 @@
     if (w.kind === "netmap") return labNetmap(w.nodes || []);
     if (w.kind === "study") {
       var pct = w.day && w.total ? 100 * w.day / w.total : 0;
+      // the ring holds the day; beside it, "of N" (or "Day 15 of 28" when wide) and the course,
+      // which may take two lines in a narrow card
       return labRing(pct, LAB_BLUE, w.day ? esc(w.day) : "–", "big") +
-        '<div class="pv"><small>' + esc((w.emoji ? w.emoji + " " : "") + "Studying · day " + (w.day || "–")) + "</small>" +
-        (w.total ? '<span class="of-total">of ' + esc(w.total) + " days</span>" : "") +
-        "<b class=\"t\">" + esc(w.course) + "</b>" +
-        (wide ? "<span>" + esc(w.lesson || "") + "</span>" : "") + "</div>";
+        '<div class="pv"><small>' + labIcon("book", "studying") + " " + (w.total ? esc((wide && w.day ? "Day " + w.day + " " : "") + "of " + w.total) : "Study") + "</small>" +
+        '<b class="t' + (wide ? "" : " two") + '">' + esc(w.course) + "</b>" +
+        (wide && w.lesson ? "<span>" + esc(w.lesson) + "</span>" : "") + "</div>";
     }
     if (w.kind === "today") {
+      var TODAY_IC = { "Due today": "cal", "Overdue": "alert", "Habits left": "check", "Reminders": "bell" };
       return '<div class="nums">' + (w.items || []).map(function (x) {
-        return '<div><b class="' + (x.warn ? "warn" : "") + '">' + esc(x.value) + "</b><small>" + esc(x.label) + "</small></div>"; }).join("") + "</div>";
+        var ic = TODAY_IC[x.label];
+        return '<div><b class="' + (x.warn ? "warn" : "") + '">' + esc(x.value) + "</b><small>" + (ic ? labIcon(ic, x.label) : esc(x.label)) + "</small></div>"; }).join("") + "</div>";
     }
-    if (w.kind === "photos") return '<div class="pv"><small>Photos</small><b>' + esc(w.images != null ? w.images.toLocaleString() : "–") + "</b><span>" + esc((w.videos || 0) + " videos") + "</span></div>";
+    if (w.kind === "photos") return '<div class="pv"><small>' + labIcon("image", "photos") + ' Photos</small><b>' + esc(w.images != null ? w.images.toLocaleString() : "–") + "</b>" +
+      (w.videos != null ? "<span>" + esc(w.videos.toLocaleString() + " videos") + "</span>" : "") + "</div>";
     return "<b>–</b>";
   }
   function refreshLab() {

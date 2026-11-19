@@ -2053,7 +2053,7 @@ html.dock-mac.theme-night .app.hop { animation: dock-hop 520ms 1; }
 .lab-strip .ring.big { width: 3.875rem; height: 3.875rem; }
 .lab-strip .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .lab-strip .ring circle { fill: none; stroke-width: 3.4; }
-.lab-strip .ring svg .track { stroke: rgba(255, 255, 255, 0.14) !important; }
+.lab-strip .ring .track { stroke: rgba(255, 255, 255, 0.14); }
 .lab-strip .ring .bar { stroke-linecap: round; transition: stroke-dashoffset 0.6s ease; }
 .lab-strip .ring em { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-style: normal;
   font-size: 0.75rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; flex-direction: column; line-height: 1; }
@@ -2061,8 +2061,23 @@ html.dock-mac.theme-night .app.hop { animation: dock-hop 520ms 1; }
 /* ring-col: wraps a ring + its label badge below it */
 .lab-strip .ring-col { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; flex: none; }
 .lab-strip .ring-label { font-size: 0.5rem; font-weight: 600; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; }
-/* of-total: "of N" line in the study pv stack */
-.lab-strip .of-total { font-size: 0.6875rem; color: rgba(255, 255, 255, 0.5); font-weight: 500; margin-top: 0.05rem; }
+/* widget icons (labIcon, Iconsax Bold): filled in the text colour, a little larger than the text */
+.lab-strip .ic { display: inline-block; width: 1.3em; height: 1.3em; vertical-align: -0.3em; fill: currentColor; flex: none; }
+.lab-strip small .ic { margin-right: 0.125rem; color: rgba(255, 255, 255, 0.8); }
+.lab-strip .cnt { font-style: normal; display: inline-flex; align-items: center; gap: 0.3rem; margin-right: 0.75rem; }
+.lab-strip .cnt .ic { color: rgba(255, 255, 255, 0.85); }
+.lab-strip .cnt:last-child { margin-right: 0; }
+.lab-strip .cnts { display: flex; font-size: 0.9375rem; }
+/* internet: the column at the end (Wi-Fi, Ethernet, AdGuard) */
+.lab-strip .p-internet .pv { flex: 1; }
+.lab-strip .side { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; padding-left: 0.875rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.875rem; font-weight: 600; color: rgba(255, 255, 255, 0.85); }
+.lab-strip .side .cnt { margin: 0; }
+.lab-strip .ag.on .ic { color: #3ddc84; } .lab-strip .ag.off .ic, .lab-strip .ag.unused .ic { color: #ffb340; }
+.lab-strip .ag.down .ic { color: #ff5a5a; }
+.lab-strip .nums small .ic { width: 1.375rem; height: 1.375rem; margin: 0.25rem 0 0; color: rgba(255, 255, 255, 0.75); }
+/* a narrow study card: the course may take two lines */
+.lab-strip b.t.two { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: 0.9375rem; line-height: 1.2rem; }
 .lab-strip .speeds i { font-style: normal; font-weight: 700; } .lab-strip .speeds .dn { color: #7cc4ff; } .lab-strip .speeds .up { color: #3ddc84; }
 .lab-strip .nodes { display: flex; width: 100%; gap: 0.75rem; }
 .lab-strip .node { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.375rem; }

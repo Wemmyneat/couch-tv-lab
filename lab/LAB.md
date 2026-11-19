@@ -101,7 +101,7 @@ Lab tab. The bridge computes each one (`bridge/lab.py`, `PANELS`); the TV and th
 
 | kind | What it shows |
 |---|---|
-| `internet` | the router's signal score, the same formula as the MTN router page (60% SINR from -5 to 25 dB, 40% RSRP from -120 to -70 dBm, on the 5G side when the router is on 5G), the network, live ↓ ↑ speed, devices |
+| `internet` | the router's signal score, the same formula as the MTN router page (60% SINR from -5 to 25 dB, 40% RSRP from -120 to -70 dBm, on the 5G side when the router is on 5G), the network, live ↓ ↑ speed, and a column with devices on Wi-Fi and on Ethernet (the router's `mtn_device_online` by `interface`) and AdGuard: on, off, down, or unused when the router does not hand out its address. Set `lab.adguard` to `{"host": "<AdGuard address>"}`. No login: the bridge asks AdGuard's DNS for a known ad domain (`probe`, default doubleclick.net and pagead2.googlesyndication.com) and a blocked answer means on. "Off" can also mean the server is an unfiltered client in AdGuard |
 | `homelab` | every `lab.proxmox` node: CPU and memory rings, guests running |
 | `services` | a TCP check of each `lab.services` entry every 30 s; `on` names the `lab.netmap` node it runs on |
 | `netmap` | `lab.netmap` as a tree (`parent`), each node green or red, with how many of its services answer |
